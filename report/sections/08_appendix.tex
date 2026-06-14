@@ -1,0 +1,68 @@
+\section{Directory Structure}
+
+\begin{lstlisting}[caption=Project directory layout]
+cnf-testbed/
+|-- Vagrantfile                 # 3 VMs + 2 internal networks
+|-- scripts/
+|   |-- bootstrap.sh            # common node provisioning
+|   `-- preload-image.sh        # distribute images over the mgmt LAN
+|-- ansible/
+|   |-- inventory.ini
+|   |-- ansible.cfg
+|   `-- playbooks/
+|       |-- k3s-master.yml      # k3s server (node0)
+|       |-- k3s-worker.yml      # join node1, node2
+|       |-- cni.yml             # Multus + Whereabouts + NAD
+|       `-- monitoring.yml      # kube-prometheus-stack
+|-- helm/
+|   `-- monitoring-values.yaml  # RAM-optimised values
+|-- manifests/
+|   `-- cnf-demo/
+|       |-- namespace.yaml
+|       |-- nad.yaml            # NetworkAttachmentDefinition net1
+|       |-- deployment.yaml     # CNF workload (replicas=3)
+|       |-- service.yaml        # ClusterIP
+|       `-- hpa.yaml            # HorizontalPodAutoscaler
+|-- tests/
+|   |-- iperf3-server.yaml
+|   `-- iperf3-client.yaml
+`-- report/                     # this LaTeX report
+\end{lstlisting}
+
+\section{Key Configuration Files}
+
+\subsection{Monitoring values (RAM-optimised)}
+
+\begin{lstlisting}[language=yaml, caption=helm/monitoring-values.yaml (excerpt)]
+alertmanager:
+  enabled: false                # save RAM
+prometheus:
+  prometheusSpec:
+    retention: 2d
+    serviceMonitorSelectorNilUsesHelmValues: false
+grafana:
+  adminPassword: admin
+  persistence: { enabled: false }
+  service: { type: NodePort, nodePort: 30030 }
+kubeEtcd:            { enabled: false }
+kubeControllerManager: { enabled: false }
+kubeScheduler:       { enabled: false }
+kubeProxy:           { enabled: false }
+\end{lstlisting}
+
+\subsection{HorizontalPodAutoscaler}
+
+\begin{lstlisting}[language=yaml, caption=manifests/cnf-demo/hpa.yaml (excerpt)]
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cnf-demo
+  minReplicas: 3
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
+\end{lstlisting}

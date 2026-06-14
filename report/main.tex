@@ -1,0 +1,205 @@
+% ======================================================================
+% CNF / NFVI Testbed — Project III (IT3943)
+% Tô Hùng Anh — MSSV 20225164 — HUST
+% ======================================================================
+\documentclass[12pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+
+\usepackage[export]{adjustbox}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{anysize}
+    \marginsize{2cm}{2cm}{2cm}{2cm}
+\usepackage{appendix}
+\usepackage{caption}
+    \captionsetup{labelfont={bf}}
+\usepackage{cite}
+\usepackage{color}
+\usepackage{fancyhdr}
+    \pagestyle{fancy}
+    \fancyhf{}
+    \fancyfoot[C]{\thepage}
+    \renewcommand{\footrulewidth}{0.4pt}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{indentfirst}
+\usepackage{siunitx}
+\usepackage{subcaption}
+\usepackage{titlesec}
+    \titleformat{\section}{\Large\bfseries}{\thesection}{1em}{}
+    \titleformat{\subsection}{\large\bfseries}{\thesubsection}{1em}{}
+    \titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{1em}{}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}}
+\renewcommand{\appendixpagename}{\LARGE Appendices}
+
+% Colors
+\definecolor{istblue}{RGB}{3, 171, 230}
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{codebackground}{RGB}{248, 248, 248}
+\definecolor{codeborder}{RGB}{220, 220, 220}
+\definecolor{keywordcolor}{RGB}{0, 0, 255}
+\definecolor{stringcolor}{RGB}{163, 21, 21}
+\definecolor{commentcolor}{RGB}{0, 128, 0}
+\definecolor{numbercolor}{RGB}{128, 128, 128}
+
+% YAML language definition for listings
+\lstdefinelanguage{yaml}{
+  keywords={true,false,null,y,n},
+  keywordstyle=\color{keywordcolor}\bfseries,
+  basicstyle=\ttfamily\footnotesize,
+  sensitive=false,
+  comment=[l]{\#},
+  commentstyle=\itshape\color{commentcolor},
+  stringstyle=\color{stringcolor},
+  moredelim=[l][\color{dkgreen}]{\&},
+  moredelim=[l][\color{magenta}]{*},
+  morestring=[b]',
+  morestring=[b]"
+}
+
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    frame=shadowbox,
+    rulesepcolor=\color{codeborder},
+    backgroundcolor=\color{codebackground},
+    numbers=left,
+    numberstyle=\tiny\color{numbercolor}\ttfamily,
+    numbersep=10pt,
+    keywordstyle=\bfseries\color{keywordcolor},
+    commentstyle=\itshape\color{commentcolor},
+    stringstyle=\color{stringcolor},
+    showstringspaces=false,
+    captionpos=b,
+    tabsize=2,
+    xleftmargin=15pt,
+    xrightmargin=5pt,
+    framexleftmargin=10pt,
+    aboveskip=15pt,
+    belowskip=15pt,
+}
+
+\usepackage[colorlinks=true, plainpages=true, linkcolor=istblue, urlcolor=istblue, citecolor=istblue, anchorcolor=istblue]{hyperref}
+
+\title{\textbf{Building a Mini NFVI Stack Emulating the ETSI NFV Architecture with Kubernetes (k3s)}}
+\author{Hung Anh To \\ \texttt{github.com/hunganh1310} \\ \small IT3943 - Project III \\ \small Hanoi University of Science and Technology}
+\date{\today}
+
+\begin{document}
+
+% ----------------------------------------------------------------------
+% Cover
+% ----------------------------------------------------------------------
+\begin{center}
+    \textsc{\large \bf Hanoi University of Science and Technology}\\
+    \textsc{\large \bf School of Information Technology and Communication}\\[1cm]
+
+    \begin{figure}[H]
+        \centering
+        \includegraphics[scale=0.2, center]{Images/hust_logo.jpg}\\[0.8cm]
+    \end{figure}
+
+    \textsc{\LARGE REPORT: PROJECT III}\\[0.5cm]
+    \HRule\\[0.4cm]
+    {\large \bf Building a Mini NFVI Stack Emulating the ETSI NFV Architecture with Kubernetes (k3s)\\[0.2cm]}
+    \large A Cloud-Native Approach to Network Function Virtualisation
+    \HRule\\[1cm]
+\end{center}
+
+\begin{flushleft}
+    \large \textbf{Prepared by:}
+\end{flushleft}
+\begin{center}
+    \begin{minipage}{0.5\textwidth}
+        \begin{flushleft}
+            \large Tô Hùng Anh
+        \end{flushleft}
+    \end{minipage}%
+    \begin{minipage}{0.5\textwidth}
+        \begin{flushright}
+            \texttt{\large MSSV: 20225164}
+        \end{flushright}
+    \end{minipage}\\[0.2cm]
+\end{center}
+
+\begin{center}
+    \textsc{}\\[2cm]
+    \large \bf Ha Noi - 2025
+\end{center}
+
+\thispagestyle{empty}
+\maketitle
+\setcounter{page}{0}
+
+\newpage
+\begin{abstract}
+\large
+Network Functions Virtualisation (NFV) decouples network functions from
+proprietary hardware, allowing them to run as software on commodity
+infrastructure. This project designs and implements a \textbf{mini NFVI
+(NFV Infrastructure) stack} that emulates the ETSI NFV architectural
+framework at small scale, using cloud-native technologies instead of a
+traditional OpenStack Virtual Infrastructure Manager (VIM). A three-node
+Kubernetes cluster is provisioned with Infrastructure-as-Code (Vagrant and
+Ansible) on a single 16~GB host, running the lightweight k3s distribution.
+A Cloud-Native Network Function (CNF) is deployed with \textbf{multi-NIC
+networking} (Multus~+~macvlan~+~Whereabouts IPAM) to separate the
+management, control, and user (data) planes following telco best practice.
+The platform integrates an observability stack (Prometheus~+~Grafana) and
+horizontal auto-scaling (HPA). Five test cases validate multi-NIC
+connectivity, data-plane throughput, service load balancing, auto-scaling,
+and observability. The work demonstrates a complete, reproducible mapping
+from the ETSI NFV reference model onto Kubernetes primitives.
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+\input{sections/01_intro}
+\input{sections/02_theory}
+\input{sections/03_vnf_cnf}
+\input{sections/04_architecture}
+\input{sections/05_implementation}
+\input{sections/06_testing}
+\input{sections/07_conclusion}
+
+\newpage
+\begin{thebibliography}{9}
+
+\bibitem{etsi002}
+ETSI GS NFV 002 V1.2.1 (2014). \textit{Network Functions Virtualisation (NFV); Architectural Framework}.
+
+\bibitem{etsi022}
+ETSI GR NFV-IFA 022 (2021). \textit{Report on the architecture and mechanisms for Cloud-native VNFs}.
+
+\bibitem{lfn}
+Linux Foundation Networking (2022). \textit{Cloud Native Telecom Initiative}.
+
+\bibitem{k3s}
+SUSE Rancher. \textit{k3s — Lightweight Kubernetes}. \url{https://docs.k3s.io}
+
+\bibitem{multus}
+K8s Network Plumbing WG. \textit{Multus-CNI}. \url{https://github.com/k8snetworkplumbingwg/multus-cni}
+
+\bibitem{whereabouts}
+K8s Network Plumbing WG. \textit{Whereabouts IPAM}. \url{https://github.com/k8snetworkplumbingwg/whereabouts}
+
+\bibitem{kps}
+Prometheus Community. \textit{kube-prometheus-stack Helm chart}. \url{https://github.com/prometheus-community/helm-charts}
+
+\bibitem{k8s}
+The Kubernetes Authors. \textit{Kubernetes Documentation}. \url{https://kubernetes.io/docs}
+
+\end{thebibliography}
+
+\appendix
+\input{sections/08_appendix}
+
+\end{document}

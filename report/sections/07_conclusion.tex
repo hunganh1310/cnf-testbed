@@ -1,0 +1,59 @@
+\section{Conclusion and Future Work}
+
+\subsection{Achievements}
+
+This project delivered a complete, reproducible mini NFVI stack that emulates
+the ETSI NFV architectural framework on a single 16~GB host. The principal
+achievements are:
+
+\begin{itemize}
+    \item A three-node k3s cluster provisioned entirely through
+          Infrastructure-as-Code (Vagrant + Ansible), demonstrating the
+          NFVI and VIM layers of the ETSI model.
+    \item A telco-grade three-plane network design that keeps management,
+          cluster, and user-plane traffic strictly separated, realised with
+          Multus, macvlan, and Whereabouts IPAM.
+    \item A CNF deployed with multi-NIC networking, fronted by a load-
+          balancing Service and scaled automatically by an HPA.
+    \item A RAM-optimised observability stack (Prometheus + Grafana) giving
+          full visibility into the cluster.
+    \item An explicit, validated mapping from every ETSI NFV building block
+          onto its Kubernetes equivalent.
+\end{itemize}
+
+All five test cases passed, confirming that the testbed behaves as designed
+across connectivity, throughput, load balancing, auto-scaling, and
+observability.
+
+\subsection{Limitations}
+
+The testbed is deliberately scoped to a single host, which imposes a number
+of limitations. The data plane relies on macvlan over a VirtualBox internal
+network rather than real NICs, so absolute throughput figures reflect the
+virtualised environment rather than bare-metal performance. Storage uses
+\texttt{emptyDir} instead of persistent volumes, so monitoring data does not
+survive pod restarts. The orchestration (NFVO) layer is manual
+(\texttt{kubectl} / Helm) rather than a full MANO stack, and only a single
+CNF type is exercised.
+
+\subsection{Future Work}
+
+Several extensions would increase the fidelity of the testbed:
+
+\begin{itemize}
+    \item \textbf{GitOps orchestration} --- replace manual \texttt{kubectl}
+          with Argo CD or Flux to approximate the NFVO role declaratively.
+    \item \textbf{SR-IOV and DPDK} --- introduce hardware-accelerated data
+          planes for line-rate packet processing, closer to production CNFs.
+    \item \textbf{Service Function Chaining} --- chain multiple CNFs to model
+          a realistic network service.
+    \item \textbf{Multi-cluster federation} --- extend to multiple VIMs to
+          exercise the NFVO across administrative domains.
+    \item \textbf{A real VNFM} --- adopt an operator-based lifecycle manager
+          in place of plain Helm.
+\end{itemize}
+
+In conclusion, the project shows that the essential structure and behaviour
+of the ETSI NFV framework can be faithfully reproduced with cloud-native
+tooling on commodity hardware, providing an accessible platform for learning
+and experimentation in network function virtualisation.

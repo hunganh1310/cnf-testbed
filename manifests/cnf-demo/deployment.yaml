@@ -1,0 +1,55 @@
+# deployment.yaml — CNF workload (whoami) với 2 NIC
+#
+# whoami: web server siêu nhẹ, trả về hostname + danh sách interface/IP
+#   → phục vụ TC-01 (thấy net1) và TC-03 (load balancing theo hostname)
+#
+# Annotation k8s.v1.cni.cncf.io/networks: net1
+#   → Multus gắn thêm interface net1 (macvlan/eth2, IP 10.30.0.100–200)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cnf-demo
+  namespace: cnf-demo
+  labels:
+    app: cnf-demo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cnf-demo
+  template:
+    metadata:
+      labels:
+        app: cnf-demo
+      annotations:
+        # Multus gắn data-plane net1 vào pod
+        k8s.v1.cni.cncf.io/networks: net1
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami:v1.10.2
+          args:
+            - --port=80
+            - --name=$(POD_NAME)
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            # requests.cpu BẮT BUỘC để HPA tính %CPU (TC-04)
+            requests:
+              cpu: 50m
+              memory: 16Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5

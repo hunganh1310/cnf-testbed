@@ -1,0 +1,71 @@
+\section{From VNF to CNF}
+
+\subsection{Limitations of VM-based VNFs}
+
+Although VM-based VNFs delivered the original promise of NFV, they carry the
+intrinsic overhead of full virtualisation:
+
+\begin{itemize}
+    \item \textbf{Boot time} --- a guest OS takes tens of seconds to minutes
+          to become ready, slowing elastic scaling and failure recovery.
+    \item \textbf{Resource footprint} --- each VM duplicates a kernel and
+          system services, consuming hundreds of megabytes to gigabytes of
+          RAM before the network function itself runs.
+    \item \textbf{Image size} --- VM images are measured in gigabytes,
+          complicating distribution and upgrades.
+    \item \textbf{Operational rigidity} --- lifecycle operations are
+          coarse-grained and slow compared to container orchestration.
+\end{itemize}
+
+\subsection{Cloud-Native Network Functions}
+
+A \textbf{CNF} re-implements a network function as one or more containers
+designed to run on Kubernetes. CNFs are stateless where possible, expose
+health and readiness probes, emit metrics for observability, and scale
+horizontally. They start in milliseconds to seconds, share the host kernel,
+and are distributed as compact OCI images. Crucially, CNFs delegate
+lifecycle management to Kubernetes controllers, so self-healing and scaling
+become declarative properties rather than bespoke automation.
+
+\subsection{OpenStack to Kubernetes Mapping}
+
+Table~\ref{tab:mapping} formalises the correspondence used throughout this
+project between the ETSI NFV building blocks and the Kubernetes / k3s
+constructs that realise them.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{ETSI NFV block} & \textbf{Traditional (OpenStack)} & \textbf{This testbed (k3s)} \\
+\midrule
+NFVI            & Physical hosts + KVM           & VirtualBox VMs (node0/1/2) \\
+VIM             & OpenStack (Nova/Neutron/Cinder)& k3s API server + scheduler \\
+VNF / CNF       & VM instance (Nova)             & Pods in namespace \texttt{cnf-demo} \\
+VNFM            & Tacker / Heat                  & Helm \\
+NFVO            & ONAP / Tacker                  & kubectl / GitOps (manual) \\
+Virtual network & Neutron networks               & Flannel + Multus/macvlan \\
+Block storage   & Cinder                         & emptyDir (testbed scope) \\
+\bottomrule
+\end{tabular}
+\caption{Mapping of ETSI NFV blocks onto OpenStack and the k3s testbed.}
+\label{tab:mapping}
+\end{table}
+
+\subsection{Multi-NIC Networking: Multus + macvlan}
+
+A standard Kubernetes pod has a single network interface (\texttt{eth0})
+attached by the primary CNI. Telco workloads, however, require multiple
+interfaces to keep management, control, and user-plane traffic separate ---
+precisely the separation Neutron provided through multiple virtual networks.
+
+\textbf{Multus} is a \emph{meta}-CNI: it does not implement networking
+itself, but allows a pod to be attached to several networks by delegating to
+other CNI plugins. In this project Multus delegates the secondary interface
+(\texttt{net1}) to the \textbf{macvlan} plugin, which creates a virtual L2
+interface bound to a physical NIC (\texttt{eth2}). IP addresses on this
+data-plane network are assigned by \textbf{Whereabouts}, a cluster-wide IPAM
+plugin that guarantees non-overlapping allocation without a central DHCP
+server. The desired secondary network is described declaratively by a
+\texttt{NetworkAttachmentDefinition} (NAD) custom resource, and requested by
+a pod through the \texttt{k8s.v1.cni.cncf.io/networks} annotation.

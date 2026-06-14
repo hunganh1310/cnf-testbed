@@ -1,0 +1,38 @@
+# hpa.yaml — HorizontalPodAutoscaler (TC-04)
+#
+# CPU trung bình > 70% requests (50m) → scale-up.
+# min 3 (baseline), max 6. Cần metrics-server (k3s đã có sẵn).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cnf-demo
+  namespace: cnf-demo
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cnf-demo
+  minReplicas: 3
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      # phản ứng nhanh để đạt scale-up < 90s (TC-04)
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 15
+    scaleDown:
+      # cool-down từ tốn, tránh giật replica
+      stabilizationWindowSeconds: 120
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 30

@@ -1,0 +1,28 @@
+# iperf3-client.yaml — đầu phát throughput + nguồn ping cho TC-01 (TC-01, TC-02)
+#
+# network-multitool thường trú (sleep) → exec iperf3/ping/ip khi cần.
+# IP net1 ghim tĩnh 10.30.0.199; ghim CÙNG node1 với server.
+# Lý do: macvlan-bridge nội node giao tiếp qua kernel bridge, KHÔNG cần
+# promiscuous mode trên NIC VirtualBox (cross-node macvlan mới cần — hạn chế đã biết).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: iperf3-client
+  namespace: cnf-demo
+  labels:
+    app: iperf3-client
+  annotations:
+    k8s.v1.cni.cncf.io/networks: '[{"name":"net1","ips":["10.30.0.199/24"]}]'
+spec:
+  nodeName: node1
+  containers:
+    - name: multitool
+      image: wbitt/network-multitool:latest
+      command: ["sleep", "infinity"]   # thường trú; TC-02 sẽ exec iperf3 -c
+      resources:
+        requests:
+          cpu: 100m
+          memory: 32Mi
+        limits:
+          cpu: "1"
+          memory: 128Mi

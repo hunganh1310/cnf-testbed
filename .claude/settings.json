@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(kubectl get *)",
+      "Bash(kubectl describe *)",
+      "Bash(kubectl logs *)",
+      "Bash(kubectl top *)",
+      "Bash(kubectl version *)",
+      "Bash(kubectl api-resources *)",
+      "Bash(vagrant status)",
+      "Bash(vagrant status *)",
+      "Bash(vagrant validate)",
+      "Bash(vagrant ssh-config *)",
+      "Bash(helm list *)",
+      "Bash(helm status *)",
+      "Bash(helm get *)",
+      "Bash(helm search *)",
+      "Bash(ansible --version)",
+      "Bash(ansible-playbook --version)",
+      "Bash(ansible-playbook --list-tasks *)",
+      "Bash(ansible-playbook --list-hosts *)",
+      "Bash(ansible-inventory *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); if echo \"$input\" | grep -qi 'vagrantfile'; then echo '--- [hook] vagrant validate ---'; vagrant validate && echo '[OK] Vagrantfile valid' || echo '[FAIL] Vagrantfile invalid'; elif echo \"$input\" | grep -q 'ansible' && echo \"$input\" | grep -q '\\.yml'; then echo '--- [hook] ansible-lint ---'; command -v ansible-lint >/dev/null 2>&1 && ansible-lint . 2>&1 | head -30 || echo '[SKIP] ansible-lint not installed'; fi",
+            "timeout": 30000
+          }
+        ]
+      }
+    ]
+  }
+}

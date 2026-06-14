@@ -1,0 +1,92 @@
+# monitoring-values.yaml — kube-prometheus-stack tối ưu cho host 16 GB RAM
+#
+# Nguyên tắc (rule 02):
+#   - Alertmanager OFF
+#   - persistence OFF → emptyDir
+#   - Prometheus retention = 2d
+#   - Grafana NodePort (KHÔNG LoadBalancer) → truy cập qua SSH tunnel
+
+# ───────────── Alertmanager: TẮT ─────────────
+alertmanager:
+  enabled: false
+
+# ───────────── Prometheus ─────────────
+prometheus:
+  prometheusSpec:
+    retention: 2d
+    retentionSize: ""
+    # KHÔNG dùng PVC — lưu in-memory/emptyDir
+    storageSpec: {}
+    # Cho phép scrape ServiceMonitor/PodMonitor ngoài chart (vd: cnf-demo)
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    resources:
+      requests:
+        cpu: 150m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+  service:
+    type: ClusterIP
+
+# ───────────── Grafana ─────────────
+grafana:
+  enabled: true
+  adminPassword: admin
+  persistence:
+    enabled: false
+  service:
+    type: NodePort
+    nodePort: 30030
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 200m
+      memory: 192Mi
+  # Sidecar nạp dashboard tự động — giữ để có dashboard sẵn
+  sidecar:
+    dashboards:
+      enabled: true
+    datasources:
+      enabled: true
+
+# ───────────── Exporters ─────────────
+nodeExporter:
+  enabled: true
+kube-state-metrics:
+  enabled: true
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  # TẮT admission webhook (giảm RAM + tránh job patch nặng)
+  admissionWebhooks:
+    enabled: false
+  tls:
+    enabled: false
+
+# Giảm tải: tắt một số component không cần cho testbed
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+# Giữ defaultRules nhưng tắt nhánh không dùng để nhẹ Prometheus
+defaultRules:
+  create: true
+  rules:
+    alertmanager: false
+    etcd: false
+    kubeProxy: false

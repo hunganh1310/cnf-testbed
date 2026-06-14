@@ -1,0 +1,162 @@
+---
+# cni.yml — Cài Multus (meta-CNI) + Whereabouts (IPAM) cho data-plane
+#
+# k3s dùng đường dẫn CNI KHÁC chuẩn → phải vá:
+#   CNI binary : /var/lib/rancher/k3s/data/current/bin   (chuẩn: /opt/cni/bin)
+#   CNI config : /var/lib/rancher/k3s/agent/etc/cni/net.d (chuẩn: /etc/cni/net.d)
+#
+# Chạy toàn bộ trên node0 (control-plane) — kubectl apply tác động cả cluster.
+
+# Play 0: multicall "cni" của k3s KHÔNG có macvlan → cài binary THẬT trên MỌI node
+# (pod chạy ở worker nên worker cũng phải có plugin binary)
+- name: Cài CNI plugin chuẩn (macvlan/static/ipvlan) cho k3s
+  hosts: all
+  become: true
+  vars:
+    k3s_cni_bin: "/var/lib/rancher/k3s/data/current/bin"
+    cni_plugins_version: "v1.5.1" # khớp phiên bản cni của k3s
+  tasks:
+    - name: Kiểm tra macvlan binary thật đã có chưa (>100KB = binary, không phải symlink)
+      ansible.builtin.stat:
+        path: "{{ k3s_cni_bin }}/macvlan"
+      register: macvlan_bin
+
+    - name: Tải bộ containernetworking/plugins
+      ansible.builtin.get_url:
+        url: "https://github.com/containernetworking/plugins/releases/download/{{ cni_plugins_version }}/cni-plugins-linux-amd64-{{ cni_plugins_version }}.tgz"
+        dest: /tmp/cni-plugins.tgz
+        mode: "0644"
+      when: not macvlan_bin.stat.exists or macvlan_bin.stat.size < 100000
+
+    - name: Giải nén macvlan/static/ipvlan vào k3s CNI bin dir
+      ansible.builtin.unarchive:
+        src: /tmp/cni-plugins.tgz
+        dest: "{{ k3s_cni_bin }}"
+        remote_src: true
+        extra_opts:
+          - "./macvlan"
+          - "./static"
+          - "./ipvlan"
+      when: not macvlan_bin.stat.exists or macvlan_bin.stat.size < 100000
+
+    - name: Kiểm tra /etc/cni/net.d
+      ansible.builtin.stat:
+        path: /etc/cni/net.d
+      register: default_confdir
+
+    # Whereabouts đọc config ở path mặc định /etc/cni/net.d/whereabouts.d.
+    # k3s lại đặt ở dir riêng → symlink để plugin tìm thấy.
+    - name: Xóa /etc/cni/net.d nếu là thư mục thật (không phải symlink)
+      ansible.builtin.file:
+        path: /etc/cni/net.d
+        state: absent
+      when: default_confdir.stat.exists and not default_confdir.stat.islnk
+
+    - name: Symlink /etc/cni/net.d -> conf dir của k3s
+      ansible.builtin.file:
+        src: "/var/lib/rancher/k3s/agent/etc/cni/net.d"
+        dest: /etc/cni/net.d
+        state: link
+        force: true
+
+- name: Cài Multus + Whereabouts secondary CNI
+  hosts: master
+  become: true
+  vars:
+    multus_version: "v4.1.0"
+    k3s_cni_bin: "/var/lib/rancher/k3s/data/current/bin"
+    k3s_cni_conf: "/var/lib/rancher/k3s/agent/etc/cni/net.d"
+    manifests_dir: /vagrant/manifests
+  tasks:
+    # ───────────── Multus thin plugin (nhẹ, không daemon thường trú) ─────────────
+    - name: Tải Multus thin daemonset
+      ansible.builtin.get_url:
+        url: "https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/{{ multus_version }}/deployments/multus-daemonset.yml"
+        dest: /tmp/multus-thin.yml
+        mode: "0644"
+
+    - name: Vá đường dẫn CNI + ghim image tag cho k3s
+      ansible.builtin.replace:
+        path: /tmp/multus-thin.yml
+        regexp: "{{ item.from }}"
+        replace: "{{ item.to }}"
+      loop:
+        # CHỈ thay giá trị hostPath (dòng "path:" thường) — KHÔNG đụng mountPath
+        # nội bộ "/host/opt/cni/bin" của container (sẽ phá ánh xạ volume).
+        - { from: 'path: /opt/cni/bin', to: "path: {{ k3s_cni_bin }}" }
+        - { from: 'path: /etc/cni/net.d', to: "path: {{ k3s_cni_conf }}" }
+        # daemonset gốc trỏ tag "snapshot" (không ổn định) → ghim bản release thin
+        - { from: 'multus-cni:snapshot', to: "multus-cni:{{ multus_version }}" }
+        # ConfigMap 00-multus.conf hardcode kubeconfig path mặc định → trỏ về dir k3s
+        - { from: '/etc/cni/net.d/multus.d/multus.kubeconfig', to: "{{ k3s_cni_conf }}/multus.d/multus.kubeconfig" }
+
+    - name: Thêm arg --multus-kubeconfig-file-host (auto-conf dùng path k3s)
+      ansible.builtin.replace:
+        path: /tmp/multus-thin.yml
+        regexp: '(\n(\s+)- "--cni-conf-dir=/host/etc/cni/net.d")'
+        replace: '\1\n\2- "--multus-kubeconfig-file-host={{ k3s_cni_conf }}/multus.d/multus.kubeconfig"'
+
+    - name: Apply Multus daemonset
+      ansible.builtin.command: k3s kubectl apply -f /tmp/multus-thin.yml
+      register: multus_apply
+      changed_when: "'created' in multus_apply.stdout or 'configured' in multus_apply.stdout"
+
+    - name: Chờ Multus daemonset sẵn sàng trên cả 3 node (worker pull image chậm)
+      ansible.builtin.command: >
+        k3s kubectl -n kube-system rollout status daemonset/kube-multus-ds --timeout=900s
+      changed_when: false
+
+    # ───────────── Whereabouts IPAM ─────────────
+    - name: Tải các manifest Whereabouts
+      ansible.builtin.get_url:
+        url: "https://raw.githubusercontent.com/k8snetworkplumbingwg/whereabouts/master/doc/crds/{{ item }}"
+        dest: "/tmp/wb-{{ item }}"
+        mode: "0644"
+      loop:
+        - daemonset-install.yaml
+        - whereabouts.cni.cncf.io_ippools.yaml
+        - whereabouts.cni.cncf.io_overlappingrangeipreservations.yaml
+
+    - name: Vá đường dẫn CNI cho k3s trong Whereabouts daemonset
+      ansible.builtin.replace:
+        path: /tmp/wb-daemonset-install.yaml
+        regexp: "{{ item.from }}"
+        replace: "{{ item.to }}"
+      loop:
+        # Chỉ thay hostPath, giữ nguyên mountPath /host/... của container
+        - { from: 'path: /opt/cni/bin', to: "path: {{ k3s_cni_bin }}" }
+        - { from: 'path: /etc/cni/net.d', to: "path: {{ k3s_cni_conf }}" }
+
+    - name: Apply Whereabouts CRDs + daemonset
+      ansible.builtin.command: "k3s kubectl apply -f /tmp/wb-{{ item }}"
+      loop:
+        - whereabouts.cni.cncf.io_ippools.yaml
+        - whereabouts.cni.cncf.io_overlappingrangeipreservations.yaml
+        - daemonset-install.yaml
+      register: wb_apply
+      changed_when: "'created' in wb_apply.stdout or 'configured' in wb_apply.stdout"
+
+    - name: Chờ Whereabouts daemonset sẵn sàng
+      ansible.builtin.command: >
+        k3s kubectl -n kube-system rollout status daemonset/whereabouts --timeout=900s
+      changed_when: false
+
+    # ───────────── Namespace + NAD net1 ─────────────
+    - name: Tạo namespace cnf-demo
+      ansible.builtin.command: "k3s kubectl apply -f {{ manifests_dir }}/cnf-demo/namespace.yaml"
+      register: ns_apply
+      changed_when: "'created' in ns_apply.stdout or 'configured' in ns_apply.stdout"
+
+    - name: Tạo NetworkAttachmentDefinition net1 (macvlan/eth2 + whereabouts)
+      ansible.builtin.command: "k3s kubectl apply -f {{ manifests_dir }}/cnf-demo/nad.yaml"
+      register: nad_apply
+      changed_when: "'created' in nad_apply.stdout or 'configured' in nad_apply.stdout"
+
+    - name: Liệt kê NAD đã tạo
+      ansible.builtin.command: k3s kubectl get net-attach-def -n cnf-demo
+      register: nad_list
+      changed_when: false
+
+    - name: Hiển thị kết quả
+      ansible.builtin.debug:
+        var: nad_list.stdout_lines

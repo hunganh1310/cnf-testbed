@@ -1,0 +1,81 @@
+\section{Theoretical Background}
+
+\subsection{The ETSI NFV Architectural Framework}
+
+The European Telecommunications Standards Institute (ETSI) defined the
+reference architecture for NFV in GS~NFV~002 \cite{etsi002}. It is organised
+into three working domains, illustrated in Figure~\ref{fig:etsi}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Images/etsi_nfv_arch.png}
+    \caption{ETSI NFV architectural framework and its mapping to this testbed.}
+    \label{fig:etsi}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{NFVI (NFV Infrastructure)} --- the totality of hardware
+          (compute, storage, network) and the virtualisation layer on which
+          VNFs execute. It provides the virtual resources consumed by network
+          functions.
+    \item \textbf{VNF (Virtualised Network Function)} --- a software
+          implementation of a network function that runs on the NFVI. A VNF
+          may be decomposed into multiple components (VNFCs).
+    \item \textbf{MANO (Management and Orchestration)} --- comprising the
+          \textbf{VIM} (manages NFVI resources), the \textbf{VNFM} (manages
+          the VNF lifecycle), and the \textbf{NFVO} (orchestrates network
+          services across multiple VNFs and VIMs).
+\end{itemize}
+
+\subsection{SDN: Control- and Data-Plane Separation}
+
+Software-Defined Networking is a complementary paradigm that decouples the
+\textbf{control plane} (which decides how traffic is forwarded) from the
+\textbf{data plane} (which actually forwards packets). This separation is
+central to NFV: it allows network functions to be inserted, chained, and
+scaled programmatically. In a telco data centre, three logically distinct
+traffic classes are kept apart:
+
+\begin{itemize}
+    \item \textbf{Management plane} --- operator access, configuration,
+          telemetry.
+    \item \textbf{Control plane} --- signalling between network elements and
+          the orchestration system.
+    \item \textbf{User / data plane} --- the actual subscriber traffic that
+          the network function processes.
+\end{itemize}
+
+Mixing these planes on a single interface is considered poor practice; this
+testbed enforces their separation (Section~4.2).
+
+\subsection{OpenStack as a Traditional VIM}
+
+In first-generation NFV, OpenStack served as the VIM. Its core services map
+to NFVI resource types: \textbf{Nova} provides compute (VMs), \textbf{Neutron}
+provides virtual networking, and \textbf{Cinder} provides block storage. VNFs
+were shipped as VM images and instantiated by Nova. While robust, this model
+inherits the overhead of full guest operating systems: large images, boot
+times measured in minutes, and substantial per-instance RAM.
+
+\subsection{Kubernetes as a Cloud-Native VIM}
+
+Kubernetes has become the de-facto VIM for cloud-native deployments. Its
+primitives correspond naturally to NFV concepts:
+
+\begin{itemize}
+    \item \textbf{Pod} --- the smallest deployable unit; hosts one or more
+          containers that constitute a VNFC.
+    \item \textbf{Deployment} --- declarative management of a replicated,
+          self-healing set of pods.
+    \item \textbf{Service} --- a stable virtual IP (ClusterIP) that
+          load-balances across pod replicas.
+    \item \textbf{HorizontalPodAutoscaler (HPA)} --- automatically adjusts
+          replica count based on observed load.
+    \item \textbf{CNI (Container Network Interface)} --- the pluggable
+          networking layer; secondary CNIs (Multus) enable multi-NIC pods.
+\end{itemize}
+
+This project uses \textbf{k3s} \cite{k3s}, a CNCF-certified, single-binary
+Kubernetes distribution. k3s replaces etcd with an embedded datastore and
+bundles a minimal control plane, making it ideal for a resource-constrained
+host while remaining fully API-compatible with upstream Kubernetes.

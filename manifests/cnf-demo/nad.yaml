@@ -1,0 +1,35 @@
+# nad.yaml — NetworkAttachmentDefinition cho data-plane (net1)
+#
+# Multus sẽ gắn interface "net1" thứ hai vào pod, dùng:
+#   - macvlan master = eth2  → bám trực tiếp vào data-plane NIC (10.30.0.0/24)
+#   - mode bridge            → các pod trên cùng node thấy nhau qua L2
+#   - IPAM whereabouts       → cấp IP tự động trong dải .100–.200
+#
+# KHÔNG đặt gateway: data-plane là mạng L2 cô lập, tránh ghi đè default route của pod.
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: net1
+  namespace: cnf-demo
+spec:
+  config: |
+    {
+      "cniVersion": "0.3.1",
+      "type": "macvlan",
+      "master": "eth2",
+      "mode": "bridge",
+      "ipam": {
+        "type": "whereabouts",
+        "range": "10.30.0.0/24",
+        "range_start": "10.30.0.100",
+        "range_end": "10.30.0.200",
+        "exclude": [
+          "10.30.0.10/32",
+          "10.30.0.11/32",
+          "10.30.0.12/32"
+        ],
+        "kubernetes": {
+          "kubeconfig": "/var/lib/rancher/k3s/agent/etc/cni/net.d/whereabouts.d/whereabouts.kubeconfig"
+        }
+      }
+    }

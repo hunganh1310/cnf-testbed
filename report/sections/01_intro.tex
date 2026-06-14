@@ -1,0 +1,57 @@
+\section{Introduction}
+
+\subsection{Motivation and Background}
+
+The telecommunications industry is undergoing a fundamental shift from
+purpose-built, vertically integrated network appliances towards software
+running on commodity computing infrastructure. This transformation,
+formalised by ETSI as \textbf{Network Functions Virtualisation (NFV)},
+decouples network functions (firewalls, routers, load balancers, packet
+gateways, etc.) from the proprietary hardware on which they traditionally
+ran \cite{etsi002}. In parallel, \textbf{Software-Defined Networking (SDN)}
+separates the network control plane from the data plane, enabling
+centralised, programmable network management.
+
+The first generation of NFV deployments virtualised network functions as
+Virtual Machines (VMs), managed by OpenStack as the Virtual Infrastructure
+Manager (VIM). More recently the industry has embraced \textbf{cloud-native}
+principles: network functions are packaged as containers and orchestrated by
+Kubernetes, giving rise to \textbf{Cloud-Native Network Functions (CNFs)}
+\cite{etsi022,lfn}. CNFs boot in seconds, consume far fewer resources, and
+inherit Kubernetes' self-healing and horizontal scaling capabilities.
+
+\subsection{Problem Statement}
+
+Production NFV platforms are large, expensive, and operationally complex,
+which makes them impractical for learning and experimentation. This project
+addresses the question: \emph{can the essential structure and behaviour of
+the ETSI NFV framework be reproduced faithfully on a single personal
+computer?} The challenge is to build a self-contained testbed that
+(i)~maps cleanly onto the ETSI reference architecture, (ii)~exhibits the
+telco-grade separation of management, control, and user planes, and
+(iii)~fits within a hard budget of 16~GB of host RAM.
+
+\subsection{Objectives}
+
+\begin{enumerate}
+    \item Provision a multi-node Kubernetes cluster entirely through
+          Infrastructure-as-Code (Vagrant~+~Ansible).
+    \item Deploy a CNF with \textbf{multi-NIC} networking that separates
+          management, cluster, and data-plane traffic.
+    \item Reproduce the telco three-plane network model using a secondary
+          CNI (Multus~+~macvlan~+~Whereabouts).
+    \item Provide full observability with Prometheus and Grafana.
+    \item Demonstrate horizontal auto-scaling (HPA) and measure real
+          data-plane throughput.
+    \item Establish an explicit mapping between each ETSI NFV building block
+          and its Kubernetes equivalent.
+\end{enumerate}
+
+\subsection{Report Organisation}
+
+Section~2 reviews the theoretical background (NFV, SDN, OpenStack, and
+Kubernetes as a cloud-native VIM). Section~3 discusses the migration from
+VM-based VNFs to CNFs and the multi-NIC networking model. Section~4 presents
+the system architecture. Section~5 details the implementation. Section~6
+reports the testing and evaluation across five test cases. Section~7
+concludes and outlines future work.

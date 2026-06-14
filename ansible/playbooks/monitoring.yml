@@ -1,0 +1,68 @@
+---
+# monitoring.yml — Cài Helm + deploy kube-prometheus-stack (RAM-optimized)
+#
+# Bước 8 trong workflow. Truy cập Grafana qua NodePort 30030 + SSH tunnel.
+
+- name: Deploy observability stack
+  hosts: master
+  become: true
+  vars:
+    helm_version: "v3.15.4"
+    chart_version: "62.7.0" # kube-prometheus-stack
+    values_file: /vagrant/helm/monitoring-values.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  tasks:
+    # ───────────── Helm CLI ─────────────
+    - name: Kiểm tra helm đã cài chưa
+      ansible.builtin.stat:
+        path: /usr/local/bin/helm
+      register: helm_bin
+
+    - name: Tải và cài Helm
+      ansible.builtin.shell: |
+        curl -fsSL https://get.helm.sh/helm-{{ helm_version }}-linux-amd64.tar.gz -o /tmp/helm.tgz
+        tar -xzf /tmp/helm.tgz -C /tmp
+        install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+      args:
+        creates: /usr/local/bin/helm
+
+    - name: Thêm Helm repo prometheus-community
+      ansible.builtin.command: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+      register: repo_add
+      changed_when: "'has been added' in repo_add.stdout"
+      failed_when: repo_add.rc != 0 and 'already exists' not in repo_add.stderr
+
+    - name: Cập nhật Helm repo
+      ansible.builtin.command: helm repo update
+      changed_when: false
+
+    - name: Tạo namespace monitoring
+      ansible.builtin.command: kubectl create namespace monitoring --dry-run=client -o yaml
+      register: ns_yaml
+      changed_when: false
+
+    - name: Apply namespace monitoring
+      ansible.builtin.shell: kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+      register: ns_apply
+      changed_when: "'created' in ns_apply.stdout"
+
+    # ───────────── Deploy chart ─────────────
+    - name: Helm upgrade/install kube-prometheus-stack
+      ansible.builtin.command: >
+        helm upgrade --install monitoring prometheus-community/kube-prometheus-stack
+        --namespace monitoring
+        --version {{ chart_version }}
+        -f {{ values_file }}
+        --wait --timeout 15m
+      register: helm_out
+      changed_when: "'has been upgraded' in helm_out.stdout or 'has been installed' in helm_out.stdout"
+
+    - name: Liệt kê pod monitoring
+      ansible.builtin.command: kubectl get pods -n monitoring
+      register: mon_pods
+      changed_when: false
+
+    - name: Hiển thị trạng thái
+      ansible.builtin.debug:
+        var: mon_pods.stdout_lines

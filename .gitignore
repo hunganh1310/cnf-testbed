@@ -1,0 +1,71 @@
+# ── Vagrant / VirtualBox ─────────────────────────────────────────
+# Trạng thái máy ảo, sinh ra khi `vagrant up`, không commit
+.vagrant/
+*.box
+*.vdi
+*.vmdk
+ubuntu-*.log
+
+# ── k3s secrets / kubeconfig ─────────────────────────────────────
+# Token join cluster + kubeconfig chứa client cert — TUYỆT ĐỐI không push
+*.kubeconfig
+kubeconfig
+k3s.yaml
+node-token
+*node-token*
+*.token
+fetched/
+
+# ── Ansible ──────────────────────────────────────────────────────
+*.retry
+ansible/*.retry
+# Bỏ comment nếu inventory chứa thông tin nhạy cảm:
+# ansible/inventory.ini
+
+# ── LaTeX build artifacts (report/) ──────────────────────────────
+*.aux
+*.lof
+*.log
+*.lot
+*.fls
+*.out
+*.toc
+*.fmt
+*.fot
+*.cb
+*.cb2
+*.bbl
+*.bcf
+*.blg
+*.run.xml
+*.synctex.gz
+*.fdb_latexmk
+*.pdfsync
+*.nav
+*.snm
+*.vrb
+*.idx
+*.ilg
+*.ind
+*.xdv
+# Giữ lại PDF báo cáo cuối nếu muốn — mặc định bỏ qua bản build:
+report/**/*.pdf
+
+# ── OS / Editor junk ─────────────────────────────────────────────
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+*.swp
+*.swo
+*~
+.idea/
+*.iml
+
+# ── Local / temp ─────────────────────────────────────────────────
+*.tmp
+*.bak
+*.orig
+.env
+.env.local

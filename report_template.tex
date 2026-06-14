@@ -1,0 +1,847 @@
+% ----------------------------------------------------------------------
+% Set the document class
+% ----------------------------------------------------------------------
+\documentclass[12pt]{article}
+
+% ----------------------------------------------------------------------
+% Define external packages, language, margins, fonts, new commands 
+% and colors
+% ----------------------------------------------------------------------
+\usepackage[utf8]{inputenc} % Codification
+\usepackage[english]{babel} % Writing idiom
+
+\usepackage[export]{adjustbox} % Align images
+\usepackage{amsmath} % Extra commands for math mode
+\usepackage{amssymb} % Mathematical symbols
+\usepackage{anysize} % Personalize margins
+    \marginsize{2cm}{2cm}{2cm}{2cm} % {left}{right}{above}{below}
+\usepackage{appendix} % Appendices
+\usepackage{cancel} % Expression cancellation
+\usepackage{caption} % Captions
+    \captionsetup{labelfont={bf}}
+\usepackage{cite} % Citations, like [1 - 3]
+\usepackage{color} % Text coloring
+\usepackage{fancyhdr} % Head note and footnote
+    \pagestyle{fancy}
+    \fancyhf{}
+    \fancyfoot[C]{\thepage} % Center of Footnote
+    \renewcommand{\footrulewidth}{0.4pt} % Footnote rule
+\usepackage{float} % Utilization of [H] in figures
+\usepackage{graphicx} % Figures in LaTeX
+\usepackage{indentfirst} % First paragraph
+\usepackage[super]{nth} % Superscripts
+\usepackage{siunitx} % SI units
+\usepackage{subcaption} % Subfigures
+\usepackage{titlesec} % Font
+    \titleformat{\section}{\Large\bfseries}{\thesection}{1em}{}
+    \titleformat{\subsection}{\large\bfseries}{\thesubsection}{1em}{}
+    \titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{1em}{}
+    \fancyfoot[C]{\thepage}
+\usepackage{booktabs} % Professional tables
+\usepackage{algorithm} % Algorithm environment
+\usepackage{algpseudocode} % Pseudocode
+\usepackage{listings} % Code listings
+\usepackage{xcolor} % Extended colors
+\usepackage{svg} % SVG support
+
+% New and re-newcommands
+\newcommand{\sen}{\operatorname{\sen}} % Sine function definition
+\newcommand{\HRule}{\rule{\linewidth}{0.5mm}} % Specific rule definition
+\renewcommand{\appendixpagename}{\LARGE Appendices}
+
+% Colors
+\definecolor{istblue}{RGB}{3, 171, 230}
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{codebackground}{RGB}{248, 248, 248}
+\definecolor{codeborder}{RGB}{220, 220, 220}
+\definecolor{keywordcolor}{RGB}{0, 0, 255}
+\definecolor{stringcolor}{RGB}{163, 21, 21}
+\definecolor{commentcolor}{RGB}{0, 128, 0}
+\definecolor{numbercolor}{RGB}{128, 128, 128}
+
+% JavaScript language definition for listings
+\lstdefinelanguage{JavaScript}{
+  keywords={typeof, new, true, false, catch, function, return, null, catch, switch, var, if, in, while, do, else, case, break, const, let, async, await, class, export, import, from},
+  keywordstyle=\bfseries\color{keywordcolor},
+  ndkeywords={class, export, boolean, throw, implements, import, this},
+  ndkeywordstyle=\color{keywordcolor}\bfseries,
+  identifierstyle=\color{black},
+  sensitive=false,
+  comment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  commentstyle=\itshape\color{commentcolor},
+  stringstyle=\color{stringcolor},
+  morestring=[b]',
+  morestring=[b]"
+}
+
+% Code listing settings with enhanced styling
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    frame=shadowbox,
+    rulesepcolor=\color{codeborder},
+    backgroundcolor=\color{codebackground},
+    numbers=left,
+    numberstyle=\tiny\color{numbercolor}\ttfamily,
+    numbersep=10pt,
+    keywordstyle=\bfseries\color{keywordcolor},
+    commentstyle=\itshape\color{commentcolor},
+    stringstyle=\color{stringcolor},
+    showstringspaces=false,
+    captionpos=b,
+    tabsize=2,
+    xleftmargin=15pt,
+    xrightmargin=5pt,
+    framexleftmargin=10pt,
+    framexrightmargin=5pt,
+    framextopmargin=5pt,
+    framexbottommargin=5pt,
+    aboveskip=15pt,
+    belowskip=15pt,
+    emphstyle=\color{red}\bfseries,
+    escapeinside={(*@}{@*)},
+}
+
+% Hyperref settings (must be loaded last)
+\usepackage[colorlinks = true, plainpages = true, linkcolor = istblue, urlcolor = istblue, citecolor = istblue, anchorcolor = istblue]{hyperref}
+
+% Title information
+\title{
+    \textbf{Real-Time Hand Gesture Recognition System for Controlling a Humanoid Robotic Hand}\\
+    \vspace{0.5cm}
+    \large A Computer Vision and Embedded Systems Approach
+}
+\author{
+    Hung Anh To\\
+    \texttt{github.com/hunganh1310}\\
+    \vspace{0.3cm}
+    \small IT3931 - Project II\\
+    \small Hanoi University of Science and Technology
+}
+\date{\today}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%                                 Document                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+
+% ----------------------------------------------------------------------
+% Cover
+% ----------------------------------------------------------------------
+\begin{center}
+    \textsc{\large \bf Hanoi University of Science and Technology}\\
+    \textsc{\large \bf School of Information Technology and Communication}\\[1cm]
+
+    \begin{figure}[H]
+        \vspace{0.1cm}
+        \includegraphics[scale = 0.2, center]{Images/OIP.jpg}\\[0.8cm]
+    \end{figure}
+    
+    \textsc{\LARGE REPORT: PROJECT II }\\[0.5cm]
+    \HRule\\[0.4cm]
+    {\large \bf {A real-time humanoid robot hand controlled with hand gesture}\\[0.2cm]}
+    \large A Computer Vision and Embedded Systems Approach
+    \HRule\\[1cm]
+\end{center}
+
+\begin{flushleft}
+    \large \textbf{Instructor:} \large Assoc. Prof. Dr. La The Vinh
+\end{flushleft}
+
+
+\begin{flushleft}
+    \large \textbf{Prepared by:} 
+\end{flushleft}
+\begin{center}
+    \begin{minipage}{0.5\textwidth}
+        \begin{flushleft}
+            \large Tô Hùng Anh
+        \end{flushleft}
+    \end{minipage}%
+    \begin{minipage}{0.5\textwidth}
+        \begin{flushright}
+            \texttt{\large MSSV: 20225164}
+        \end{flushright}
+    \end{minipage}\\[0.2cm]
+
+        
+\end{center}
+    
+\begin{center}
+    \textsc{}\\[2cm]
+    \large \bf Ha Noi - 2025
+\end{center}
+
+
+\thispagestyle{empty}
+\maketitle
+\setcounter{page}{0}
+
+\newpage
+\begin{abstract}
+\large This report presents the design, implementation, and evaluation of a real-time hand gesture recognition system that controls a five-fingered humanoid robotic hand using computer vision. The system employs Google's MediaPipe Hands framework for accurate hand landmark detection and tracking, a web-based interface utilizing the Web Serial API for communication, and an ESP32 microcontroller for servo motor control. The primary objective is to create an intuitive human-robot interaction platform that mirrors human hand movements in real-time. The system demonstrates successful gesture recognition with adaptive calibration capabilities, achieving responsive control of individual finger movements. Key contributions include the integration of browser-based computer vision with embedded hardware control, implementation of an adaptive normalization algorithm for personalized gesture recognition, and a modular architecture supporting future extensions. The project demonstrates practical applications in teleoperation, rehabilitation robotics, and human-computer interaction research.
+\end{abstract}
+
+\newpage
+
+% ----------------------------------------------------------------------
+% Contents
+% ----------------------------------------------------------------------
+\tableofcontents 
+
+\newpage
+\section{Introduction}
+
+\subsection{Motivation and Background}
+
+Human-robot interaction (HRI) has become an increasingly important area of research as robots transition from industrial settings to everyday environments. Natural and intuitive interfaces are essential for effective human-robot collaboration. Hand gestures represent one of the most natural forms of human communication and offer a promising avenue for robot control \cite{hri_survey}.
+
+Traditional robot control methods often rely on specialized input devices such as joysticks, keyboards, or haptic controllers. While effective, these interfaces require users to learn specific control schemes and may not be intuitive for non-expert users. Vision-based hand gesture recognition eliminates the need for physical controllers and allows users to interact with robotic systems using natural hand movements.
+
+\subsection{Problem Statement}
+
+The challenge addressed in this project is to develop a system that:
+\begin{itemize}
+    \item Accurately detects and tracks hand movements in real-time
+    \item Translates finger positions into appropriate servo motor commands
+    \item Maintains low latency for responsive control
+    \item Adapts to different users without manual calibration
+    \item Operates reliably under varying environmental conditions
+\end{itemize}
+
+\subsection{Objectives}
+
+The primary objectives of this project are:
+
+\begin{enumerate}
+    \item \textbf{Hand Detection and Tracking}: Implement robust real-time hand landmark detection using the MediaPipe Hands framework.
+    \item \textbf{Gesture Mapping}: Develop an algorithm to convert hand landmarks into normalized finger curl values that represent finger positions.
+    \item \textbf{Hardware Control}: Design and implement firmware for an ESP32 microcontroller to control five servo motors corresponding to the five fingers of a robotic hand.
+    \item \textbf{Communication Protocol}: Establish reliable serial communication between the web interface and the embedded hardware.
+    \item \textbf{Adaptive Calibration}: Implement an adaptive normalization system that automatically adjusts to individual users' hand sizes and movement ranges.
+    \item \textbf{User Interface}: Create an intuitive web-based interface for system control and monitoring.
+\end{enumerate}
+
+\subsection{System Overview}
+
+The developed system consists of three main components:
+
+\textbf{1. Computer Vision Module}: A browser-based application utilizing MediaPipe Hands for real-time hand landmark detection. This module processes webcam video frames, identifies 21 hand landmarks per frame, and computes normalized finger curl values.
+
+\textbf{2. Communication Layer}: The Web Serial API facilitates direct browser-to-hardware communication, transmitting servo angle commands at a rate of approximately 20 Hz.
+
+\textbf{3. Hardware Control Module}: An ESP32-based embedded system receives angle commands and controls five servo motors with pulse-width modulation (PWM). The firmware includes safety features such as timeout-based automatic reset and angle limiting.
+
+\subsection{Report Organization}
+
+This report is organized as follows: Section 2 reviews related work in gesture recognition and robotic control. Section 3 details the system architecture and design decisions. Section 4 describes the implementation of each component. Section 5 presents experimental results and system evaluation. Section 6 discusses limitations and future work, and Section 7 concludes the report.
+
+\section{Literature Review and Related Work}
+
+\subsection{Hand Gesture Recognition}
+
+Hand gesture recognition has been extensively studied in computer vision research. Early approaches relied on colored gloves or markers to simplify detection \cite{glove_based}. Modern methods leverage machine learning and deep learning for marker-less recognition.
+
+Recent advances in convolutional neural networks (CNNs) have enabled accurate hand pose estimation from RGB images. OpenPose \cite{openpose} introduced multi-person 2D pose estimation including hand keypoints. MediaPipe Hands \cite{mediapipe_hands} specifically focuses on hand tracking, offering a lightweight solution suitable for real-time applications on consumer hardware.
+
+\subsection{MediaPipe Hands Framework}
+
+MediaPipe Hands is a high-fidelity hand tracking solution developed by Google Research. The framework employs a two-stage pipeline:
+
+\begin{enumerate}
+    \item \textbf{Palm Detection}: A single-shot detector (SSD) model locates hands in the input frame.
+    \item \textbf{Hand Landmark Detection}: A regression model predicts 21 3D landmarks for each detected hand.
+\end{enumerate}
+
+The framework achieves real-time performance on mobile devices and browsers through optimizations such as model quantization and efficient inference using TensorFlow Lite. MediaPipe Hands provides both 2D coordinates (normalized to image dimensions) and estimated 3D depth for each landmark.
+
+\subsection{Robotic Hand Control}
+
+Anthropomorphic robotic hands have been developed for various applications including prosthetics, teleoperation, and research. Control strategies can be categorized as:
+
+\textbf{Direct Mapping}: User inputs directly correspond to joint angles. This approach offers intuitive control but may not leverage the full dexterity of the robotic hand.
+
+\textbf{Grasp-Based Control}: Users select predefined grasp patterns. While simplified, this limits the variety of possible hand configurations.
+
+\textbf{Imitation Learning}: The robot learns to replicate demonstrated movements. This requires substantial training data and computational resources.
+
+This project adopts a direct mapping approach, prioritizing real-time responsiveness and intuitive control.
+
+\subsection{Embedded Systems for Servo Control}
+
+Microcontrollers such as Arduino and ESP32 are widely used for servo motor control in robotics projects. The ESP32 offers advantages including:
+\begin{itemize}
+    \item Dual-core processor for multitasking
+    \item Built-in Wi-Fi and Bluetooth (expandability)
+    \item Multiple PWM channels
+    \item Compatibility with the Arduino ecosystem
+\end{itemize}
+
+The ESP32Servo library simplifies servo control by abstracting hardware PWM configuration.
+
+\subsection{Web Serial API}
+
+The Web Serial API enables web applications to communicate with serial devices. Introduced in Chrome 89, this API provides:
+\begin{itemize}
+    \item Direct hardware access from browsers
+    \item Elimination of intermediate software layers
+    \item Simplified deployment (no desktop application required)
+\end{itemize}
+
+This technology facilitates the development of web-based robotics interfaces, reducing software installation complexity for end users.
+
+\newpage
+\section{System Architecture and Design}
+
+\subsection{Overall System Architecture}
+
+Figure \ref{fig:system_architecture} illustrates the system architecture. The system comprises three layers:
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[scale = 0.8, center]{Images/Architecture.png}
+    \caption{System Architecture Diagram}
+    \label{fig:system_architecture}
+\end{figure}
+
+\subsection{Design Decisions}
+
+\subsubsection{Web-Based Implementation}
+
+The decision to implement the vision processing component as a web application offers several advantages:
+\begin{itemize}
+    \item \textbf{Cross-platform compatibility}: The system runs on any device with a modern browser.
+    \item \textbf{No installation required}: Users can access the system through a URL.
+    \item \textbf{Easy updates}: Changes are deployed centrally without requiring user action.
+    \item \textbf{MediaPipe.js integration}: Direct access to optimized models without manual setup.
+\end{itemize}
+
+\subsubsection{Adaptive Normalization}
+
+User hand sizes vary significantly, and a fixed threshold system would require manual calibration for each user. The adaptive normalization algorithm automatically learns the minimum and maximum curl values for each finger during use, enabling personalized gesture recognition without explicit calibration steps.
+
+\subsubsection{Communication Protocol}
+
+A simple text-based protocol was chosen over binary formats for several reasons:
+\begin{itemize}
+    \item \textbf{Debuggability}: Commands are human-readable, facilitating development and troubleshooting.
+    \item \textbf{Simplicity}: Parsing is straightforward on resource-constrained microcontrollers.
+    \item \textbf{Extensibility}: Adding parameters requires minimal changes.
+\end{itemize}
+
+The protocol format: \texttt{\#angle1 angle2 angle3 angle4 angle5\textbackslash n}
+
+The leading \texttt{\#} character serves as a command identifier, followed by five space-separated integer values (0-180°) representing servo angles, and terminated with a newline character.
+
+\subsubsection{Servo Control Strategy}
+
+Direct angle control provides simplicity and low latency. Each servo receives explicit angle commands without intermediate trajectory planning. While this may result in less smooth motion compared to interpolation-based approaches, it ensures minimal delay between gesture and response.
+
+\newpage
+\section{Implementation}
+
+\subsection{Computer Vision Module}
+
+\subsubsection{Hand Landmark Detection}
+
+The MediaPipe Hands model is initialized with the following configuration:
+
+\begin{lstlisting}[language=JavaScript, caption=MediaPipe Hands Initialization]
+const hands = new Hands({
+  locateFile: (file) => 
+    `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+});
+
+hands.setOptions({
+  maxNumHands: 1,
+  modelComplexity: 1,
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5,
+});
+\end{lstlisting}
+
+\textbf{Parameter Selection}:
+\begin{itemize}
+    \item \texttt{maxNumHands: 1}: Only one hand is tracked to reduce computational load.
+    \item \texttt{modelComplexity: 1}: Medium complexity balances accuracy and performance.
+    \item \texttt{minDetectionConfidence: 0.5}: Moderate threshold reduces false positives.
+    \item \texttt{minTrackingConfidence: 0.5}: Ensures stable tracking across frames.
+\end{itemize}
+
+The model outputs 21 landmarks per hand, each with normalized $(x, y)$ coordinates in the range [0, 1] and a depth value $z$.
+
+\subsubsection{Finger Curl Calculation}
+
+Finger curl is quantified by measuring the Euclidean distance between the fingertip and the base of each finger. For finger $i$:
+
+\begin{equation}
+    \text{curl}_i = |x_{\text{tip}} - x_{\text{base}}| + |y_{\text{tip}} - y_{\text{base}}|
+\end{equation}
+
+The landmark indices for each finger are:
+\begin{itemize}
+    \item Thumb: [1, 2, 3, 4]
+    \item Index: [5, 6, 7, 8]
+    \item Middle: [9, 10, 11, 12]
+    \item Ring: [13, 14, 15, 16]
+    \item Pinky: [17, 18, 19, 20]
+\end{itemize}
+
+\subsubsection{Adaptive Normalization Algorithm}
+
+To accommodate different hand sizes and movement ranges, the system dynamically tracks minimum and maximum curl values:
+
+\begin{algorithm}[H]
+\caption{Adaptive Normalization}
+\begin{algorithmic}[1]
+\State Initialize $\text{curl}_{\min}[i] \gets \infty$ for $i = 1..5$
+\State Initialize $\text{curl}_{\max}[i] \gets -\infty$ for $i = 1..5$
+\State
+\For{each frame}
+    \For{each finger $i$}
+        \State Compute $\text{curl}_i$ using Equation (1)
+        \State $\text{curl}_{\min}[i] \gets \min(\text{curl}_{\min}[i], \text{curl}_i)$
+        \State $\text{curl}_{\max}[i] \gets \max(\text{curl}_{\max}[i], \text{curl}_i)$
+        \State $\text{range}_i \gets \text{curl}_{\max}[i] - \text{curl}_{\min}[i]$
+        \If{$\text{range}_i > 0$}
+            \State $\text{normalized}_i \gets \frac{\text{curl}_i - \text{curl}_{\min}[i]}{\text{range}_i}$
+        \Else
+            \State $\text{normalized}_i \gets 0$
+        \EndIf
+    \EndFor
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+This produces normalized values in the range [0, 1], where 0 represents fully extended and 1 represents fully curled.
+
+\subsubsection{Angle Mapping}
+
+Normalized curl values are mapped to servo angles (0-180°):
+
+\begin{equation}
+    \theta_i = (1 - \text{normalized}_i) \times 180°
+\end{equation}
+
+The inversion $(1 - \text{normalized}_i)$ ensures that an open hand (low curl) corresponds to 180° (servo open position) and a closed hand (high curl) corresponds to 0° (servo closed position).
+
+Additional constraints are applied:
+\begin{itemize}
+    \item If $\theta_i > 140°$, set $\theta_i = 180°$ (fully open)
+    \item If $\theta_i < 30°$, set $\theta_i = 0°$ (fully closed)
+\end{itemize}
+
+These thresholds reduce jitter from minor hand movements.
+
+\newpage
+\subsection{Web Serial Communication}
+
+\subsubsection{Establishing Connection}
+
+The Web Serial API is accessed through user interaction (required for security):
+
+\begin{lstlisting}[language=JavaScript, caption=Serial Port Connection]
+document.getElementById("enableSerial")
+  .addEventListener("click", async () => {
+  try {
+    const port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+    window.port = port;
+    console.log("Serial connection established");
+  } catch (error) {
+    console.error("Error with Web Serial:", error);
+  }
+});
+\end{lstlisting}
+
+\subsubsection{Data Transmission}
+
+Commands are transmitted at approximately 20 Hz (50 ms interval):
+
+\begin{lstlisting}[language=JavaScript, caption=Serial Data Transmission]
+async function sendToSerial(data) {
+  if (window.port) {
+    try {
+      const writer = window.port.writable.getWriter();
+      const encoder = new TextEncoder();
+      await writer.write(encoder.encode(data));
+      writer.releaseLock();
+      await new Promise(resolve => 
+        setTimeout(resolve, 50));
+    } catch (error) {
+      console.error("Error writing to serial:", error);
+    }
+  }
+}
+\end{lstlisting}
+
+The 50 ms delay prevents buffer overflow and ensures stable communication.
+
+\newpage
+\subsection{ESP32 Firmware}
+
+\subsubsection{Initialization}
+
+The firmware initializes five servo objects and configures PWM parameters:
+
+\begin{lstlisting}[language=C++, caption=ESP32 Servo Initialization]
+const int servoPins[5] = {13, 12, 14, 27, 26};
+Servo servos[5];
+
+void setup() {
+  Serial.begin(9600);
+  
+  for (int i = 0; i < 5; ++i) {
+    servos[i].setPeriodHertz(50);
+    servos[i].attach(servoPins[i], 500, 2400);
+    servos[i].write(OPEN_ANGLES[i]);
+  }
+}
+\end{lstlisting}
+
+\textbf{GPIO Pin Assignment}:
+\begin{itemize}
+    \item GPIO 13: Thumb
+    \item GPIO 12: Index finger
+    \item GPIO 14: Middle finger
+    \item GPIO 27: Ring finger
+    \item GPIO 26: Pinky finger
+\end{itemize}
+
+Pulse width range (500-2400 μs) accommodates various servo models.
+
+\subsubsection{Command Parsing}
+
+Incoming serial data is parsed and validated:
+
+\begin{lstlisting}[language=C++, caption=Command Parsing]
+void loop() {
+  if (Serial.available() > 0) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    
+    if (input.startsWith("#")) {
+      input = input.substring(1);
+      int vals[5];
+      int count = sscanf(input.c_str(), 
+        "%d %d %d %d %d", 
+        &vals[0], &vals[1], &vals[2], 
+        &vals[3], &vals[4]);
+
+      if (count == 5) {
+        for (int i = 0; i < 5; i++) {
+          int target = map(vals[i], 0, 180, 
+            OPEN_ANGLES[i], CLOSE_ANGLES[i]);
+          target = constrain(target, 0, 
+            CLOSE_ANGLES[i]);
+          servos[i].write(target);
+        }
+      }
+    }
+  }
+}
+\end{lstlisting}
+
+\subsubsection{Safety Features}
+
+A timeout mechanism prevents the robotic hand from maintaining positions indefinitely if communication is lost:
+
+\begin{lstlisting}[language=C++, caption=Timeout Safety Mechanism]
+unsigned long lastSignalTime = 0;
+const unsigned long TIMEOUT = 10000; // 10 seconds
+
+if (millis() - lastSignalTime > TIMEOUT) {
+  if (!isResting) {
+    for (int i = 0; i < 5; i++) {
+      servos[i].write(OPEN_ANGLES[i]);
+    }
+    isResting = true;
+  }
+}
+\end{lstlisting}
+
+After 10 seconds without receiving commands, all servos return to the open position (0°).
+
+\subsubsection{Angle Mapping}
+
+Servo physical constraints vary by finger. The firmware maps received angles to finger-specific ranges:
+
+\begin{lstlisting}[language=C++, caption=Finger-Specific Angle Ranges]
+const int OPEN_ANGLES[5] = {0, 0, 0, 0, 0};
+const int CLOSE_ANGLES[5] = {120, 160, 180, 120, 140};
+\end{lstlisting}
+
+These values are calibrated based on the mechanical design of the robotic hand.
+
+\subsection{User Interface}
+
+The web interface provides:
+\begin{itemize}
+    \item \textbf{Camera Feed}: Real-time video display with overlaid hand landmarks
+    \item \textbf{Enable Camera Button}: Requests webcam permissions and starts detection
+    \item \textbf{Enable Serial Button}: Opens serial port selection dialog
+    \item \textbf{Reset Min/Max Button}: Clears accumulated calibration data
+\end{itemize}
+
+Visual feedback indicates connection status through color-coded buttons (green for enabled, gray for disabled).
+
+\section{Results and Evaluation}
+
+\subsection{System Performance}
+
+\subsubsection{Detection Accuracy}
+
+MediaPipe Hands achieves robust hand detection under the following conditions:
+\begin{itemize}
+    \item \textbf{Lighting}: Adequate performance in indoor lighting ( more than 200 lux)
+    \item \textbf{Background}: Successful detection against both simple and complex backgrounds
+    \item \textbf{Orientation}: Reliable tracking across various hand orientations
+    \item \textbf{Occlusion}: Handles partial finger occlusion gracefully
+\end{itemize}
+
+\subsubsection{Latency Analysis}
+
+End-to-end latency (user hand movement to servo response) comprises:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lc}
+\toprule
+\textbf{Component} & \textbf{Latency (ms)} \\
+\midrule
+Camera frame capture & 16-33 (30-60 FPS) \\
+MediaPipe inference & 20-40 \\
+Curl calculation \& mapping & under 5 \\
+Serial transmission & 10-15 \\
+ESP32 processing & under 5 \\
+Servo response time & 100-200 \\
+\midrule
+\textbf{Total} & \textbf{151-298 ms} \\
+\bottomrule
+\end{tabular}
+\caption{Latency Breakdown}
+\label{tab:latency}
+\end{table}
+
+The dominant latency factor is servo mechanical response time, which is hardware-dependent and not software-optimizable without replacing servos.
+
+\subsubsection{Frame Rate}
+
+The system operates at approximately 20-30 frames per second on typical hardware:
+\begin{itemize}
+    \item \textbf{Desktop} (Intel i5, integrated GPU): 25-30 FPS
+    \item \textbf{Laptop} (Intel i7, integrated GPU): 20-25 FPS
+    \item \textbf{High-end Desktop} (Ryzen 7, dedicated GPU): 30+ FPS
+\end{itemize}
+
+\subsection{Adaptive Calibration Effectiveness}
+
+The adaptive normalization algorithm successfully accommodates different users without manual calibration. Testing with five users of varying hand sizes demonstrated:
+\begin{itemize}
+    \item Convergence to stable min/max values within 5-10 seconds
+    \item Consistent finger curl recognition across users
+    \item Ability to reset and recalibrate for new users
+\end{itemize}
+
+\subsection{Control Responsiveness}
+
+The robotic hand accurately mirrors user gestures with the following characteristics:
+\begin{itemize}
+    \item \textbf{Individual Finger Control}: Each finger responds independently
+    \item \textbf{Proportional Movement}: Servo angles correspond proportionally to finger curl
+    \item \textbf{Stability}: Minimal jitter due to threshold constraints
+\end{itemize}
+
+\subsection{Limitations}
+
+Several limitations were identified during testing:
+
+\textbf{1. Lighting Dependency}: Performance degrades in low-light conditions (<100 lux) or with strong backlighting.
+
+\textbf{2. Hand Detection Range}: Optimal detection occurs at 30-80 cm from the camera. Very close or distant hands may not be detected reliably.
+
+\textbf{3. Motion Blur}: Rapid hand movements may cause motion blur, temporarily reducing landmark accuracy.
+
+\textbf{4. Single Hand Limitation}: The system currently supports only one hand due to the \texttt{maxNumHands: 1} configuration.
+
+\textbf{5. Browser Compatibility}: Web Serial API support is limited to Chromium-based browsers (Chrome, Edge, Opera).
+
+\textbf{6. Servo Quality}: Low-cost servos exhibit backlash and limited resolution, affecting precision.
+
+\section{Discussion and Future Work}
+
+\subsection{Achievements}
+
+This project successfully demonstrates:
+\begin{itemize}
+    \item Integration of state-of-the-art computer vision with embedded hardware control
+    \item Real-time gesture recognition with adaptive calibration
+    \item A user-friendly web-based interface requiring no installation
+    \item Robust communication between browser and microcontroller
+    \item Modular architecture facilitating future extensions
+\end{itemize}
+
+\subsection{Future Enhancements}
+
+\subsubsection{Gesture Recognition}
+
+Extend beyond continuous mirroring to recognize discrete gestures (e.g., thumbs-up, peace sign) for triggering specific actions or switching control modes.
+
+\subsubsection{Motion Smoothing}
+
+Implement trajectory interpolation or low-pass filtering to reduce jitter and produce smoother servo movements:
+
+\begin{equation}
+    \theta_{\text{smoothed}}(t) = \alpha \cdot \theta_{\text{raw}}(t) + (1-\alpha) \cdot \theta_{\text{smoothed}}(t-1)
+\end{equation}
+
+where $\alpha \in [0,1]$ is a smoothing parameter.
+
+\subsubsection{Bimanual Control}
+
+Support two-hand tracking for controlling two robotic hands simultaneously, enabling more complex manipulation tasks.
+
+\subsubsection{Force Feedback}
+
+Integrate force sensors in the robotic hand and provide haptic feedback to the user, enhancing teleoperation capabilities.
+
+\subsubsection{Machine Learning Enhancements}
+
+Train custom models for:
+\begin{itemize}
+    \item User-specific gesture recognition
+    \item Context-aware gesture interpretation
+    \item Prediction of intended movements to reduce latency
+\end{itemize}
+
+\subsubsection{Wireless Communication}
+
+Replace serial communication with Wi-Fi or Bluetooth for wireless operation, leveraging ESP32's built-in connectivity.
+
+\subsubsection{Mobile Application}
+
+Develop a mobile app for smartphone-based control, expanding accessibility and portability.
+
+\subsubsection{Virtual Reality Integration}
+
+Integrate with VR headsets for immersive teleoperation experiences, useful in hazardous environment operations or surgical applications.
+
+\subsection{Applications}
+
+The developed system has potential applications in:
+
+\textbf{Prosthetics}: Provide intuitive control interfaces for prosthetic hands, improving user experience.
+
+\textbf{Teleoperation}: Enable remote manipulation in hazardous environments (e.g., nuclear facilities, underwater exploration).
+
+\textbf{Rehabilitation}: Assist in hand mobility therapy by providing visual feedback and quantifiable metrics.
+
+\textbf{Education}: Serve as a teaching platform for robotics, computer vision, and embedded systems courses.
+
+\textbf{Entertainment}: Interactive installations and demonstrations at science museums or exhibitions.
+
+\section{Conclusion}
+
+This project successfully developed a real-time hand gesture recognition system for controlling a humanoid robotic hand. By integrating MediaPipe Hands for vision processing, Web Serial API for communication, and ESP32 for hardware control, the system achieves intuitive and responsive gesture-based robot control.
+
+Key contributions include:
+\begin{enumerate}
+    \item A complete implementation of vision-based robotic hand control requiring no specialized input devices
+    \item An adaptive normalization algorithm enabling personalized gesture recognition without manual calibration
+    \item A modular web-based architecture facilitating deployment and future extensions
+    \item Demonstration of effective integration between browser-based machine learning and embedded systems
+\end{enumerate}
+
+The system operates with acceptable latency (150-300 ms), achieves reliable hand detection, and provides proportional control of individual fingers. While limitations such as lighting dependency and servo quality exist, the project demonstrates the feasibility and effectiveness of computer vision-based human-robot interaction.
+
+Future work will focus on enhancing gesture recognition capabilities, improving motion smoothness, and expanding applications to areas such as prosthetics and rehabilitation. The modular design of the system provides a solid foundation for these enhancements.
+
+This project represents a step toward more natural and accessible human-robot interfaces, contributing to the broader goal of seamless human-robot collaboration in everyday environments.
+
+\section*{Acknowledgments}
+
+I would like to express gratitude to my instructor for guidance throughout this project, the developers of MediaPipe for providing an accessible hand tracking framework, and the open-source community for libraries and resources that made this work possible.
+
+\begin{thebibliography}{99}
+
+\bibitem{hri_survey}
+Goodrich, M. A., \& Schultz, A. C. (2008). Human--robot interaction: a survey. \textit{Foundations and Trends in Human--Computer Interaction}, 1(3), 203-275.
+
+\bibitem{glove_based}
+LaViola Jr, J. J. (1999). A survey of hand posture and gesture recognition techniques and technology. \textit{Brown University}, 29.
+
+\bibitem{openpose}
+Cao, Z., Hidalgo, G., Simon, T., Wei, S. E., \& Sheikh, Y. (2019). OpenPose: realtime multi-person 2D pose estimation using Part Affinity Fields. \textit{IEEE Transactions on Pattern Analysis and Machine Intelligence}, 43(1), 172-186.
+
+\bibitem{mediapipe_hands}
+Zhang, F., Bazarevsky, V., Vakunov, A., Tkachenka, A., Sung, G., Chang, C. L., \& Grundmann, M. (2020). MediaPipe Hands: On-device Real-time Hand Tracking. \textit{arXiv preprint arXiv:2006.10214}.
+
+\bibitem{esp32servo}
+Hapgood, J. (2021). ESP32Servo Library. Retrieved from \url{https://github.com/madhephaestus/ESP32Servo}
+
+\bibitem{webserial}
+Google Chrome Developers. (2021). Web Serial API. Retrieved from \url{https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API}
+
+\bibitem{servo_control}
+Siciliano, B., \& Khatib, O. (Eds.). (2016). \textit{Springer handbook of robotics}. Springer.
+
+\bibitem{computer_vision}
+Szeliski, R. (2022). \textit{Computer vision: algorithms and applications}. Springer Nature.
+
+\bibitem{embedded_systems}
+Lee, E. A., \& Seshia, S. A. (2016). \textit{Introduction to embedded systems: A cyber-physical systems approach}. MIT press.
+
+\end{thebibliography}
+
+\appendix
+
+\section{Related Documents}
+
+The complete source code for this project is available at:
+\begin{center}
+    \href{https://github.com/hunganh1310/IT3931-Project-II}{Github Repo}
+\end{center}
+
+The demo video for this project is available at:
+\begin{center}
+    \href{https://drive.google.com/file/d/1ATmGgyqYcDjSp1uDy9gH0fnHCdQS-FYf/view?usp=sharing}{Click here to watch the Demo Video}
+\end{center}
+
+\section{Hardware Pin Configuration}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{cccc}
+\toprule
+\textbf{Finger} & \textbf{ESP32 GPIO} & \textbf{Open Angle} & \textbf{Close Angle} \\
+\midrule
+Thumb & 13 & 0° & 120° \\
+Index & 12 & 0° & 160° \\
+Middle & 14 & 0° & 180° \\
+Ring & 27 & 0° & 120° \\
+Pinky & 26 & 0° & 140° \\
+\bottomrule
+\end{tabular}
+\caption{Servo Configuration Details}
+\end{table}
+
+\section{Communication Protocol Specification}
+
+\subsection{Command Format}
+\begin{verbatim}
+#<angle1> <angle2> <angle3> <angle4> <angle5>\n
+\end{verbatim}
+
+\subsection{Example Commands}
+\begin{itemize}
+    \item Open hand: \texttt{\#180 180 180 180 180}
+    \item Closed fist: \texttt{\#0 0 0 0 0}
+    \item Pointing gesture: \texttt{\#0 180 0 0 0}
+    \item Peace sign: \texttt{\#0 180 180 0 0}
+\end{itemize}
+
+\subsection{Baud Rate}
+9600 bps, 8 data bits, no parity, 1 stop bit (8N1)
+
+\end{document}

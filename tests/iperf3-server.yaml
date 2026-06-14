@@ -1,0 +1,28 @@
+# iperf3-server.yaml — đầu nhận throughput + anchor data-plane net1 (TC-01, TC-02)
+#
+# Dùng network-multitool: có sẵn iperf3 + ip + ping (whoami distroless không có).
+# IP net1 ghim tĩnh 10.30.0.200; ghim node1 (client cũng node1 → macvlan-bridge nội node).
+apiVersion: v1
+kind: Pod
+metadata:
+  name: iperf3-server
+  namespace: cnf-demo
+  labels:
+    app: iperf3-server
+  annotations:
+    k8s.v1.cni.cncf.io/networks: '[{"name":"net1","ips":["10.30.0.200/24"]}]'
+spec:
+  nodeName: node1
+  containers:
+    - name: multitool
+      image: wbitt/network-multitool:latest
+      command: ["iperf3", "-s"]   # iperf3 server foreground → pod thường trú
+      ports:
+        - containerPort: 5201
+      resources:
+        requests:
+          cpu: 100m
+          memory: 32Mi
+        limits:
+          cpu: "1"
+          memory: 128Mi

@@ -1,0 +1,84 @@
+---
+# k3s-master.yml — Cài k3s server (control-plane) trên node0
+#
+# Thiết kế mạng:
+#   --node-ip      10.10.10.10  → node IP nằm trên mgmt network (eth1)
+#   --flannel-iface eth1        → control-plane signaling đi qua mgmt, KHÔNG đụng data-plane (eth2)
+#   --disable traefik/servicelb → tiết kiệm RAM, Grafana expose bằng NodePort
+#   metrics-server GIỮ LẠI       → bắt buộc cho HPA (TC-04)
+
+- name: Cài k3s server trên control-plane
+  hosts: master
+  become: true
+  vars:
+    k3s_version: "v1.30.5+k3s1"
+    mgmt_iface: eth1
+  tasks:
+    - name: Kiểm tra k3s binary đã tồn tại chưa
+      ansible.builtin.stat:
+        path: /usr/local/bin/k3s
+      register: k3s_bin
+
+    - name: Tải script cài đặt k3s
+      ansible.builtin.get_url:
+        url: https://get.k3s.io
+        dest: /tmp/k3s-install.sh
+        mode: "0755"
+      when: not k3s_bin.stat.exists
+
+    - name: Cài đặt k3s server (idempotent — chỉ chạy khi chưa có binary)
+      ansible.builtin.shell: |
+        INSTALL_K3S_VERSION={{ k3s_version }} \
+        INSTALL_K3S_EXEC="server \
+          --node-ip {{ mgmt_ip }} \
+          --advertise-address {{ mgmt_ip }} \
+          --flannel-iface {{ mgmt_iface }} \
+          --disable traefik \
+          --disable servicelb \
+          --write-kubeconfig-mode 644 \
+          --tls-san {{ mgmt_ip }}" \
+        sh /tmp/k3s-install.sh
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Đảm bảo service k3s đang chạy và bật khi khởi động
+      ansible.builtin.systemd:
+        name: k3s
+        state: started
+        enabled: true
+
+    - name: Chờ node control-plane sẵn sàng (Ready)
+      ansible.builtin.shell: >
+        k3s kubectl get node node0
+        -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+      register: node_ready
+      until: node_ready.stdout == "True"
+      retries: 30
+      delay: 10
+      changed_when: false
+
+    - name: Đọc node-token để worker join (lưu thành fact)
+      ansible.builtin.slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: k3s_token_b64
+
+    - name: Hiển thị token (debug — dùng cho worker)
+      ansible.builtin.debug:
+        msg: "k3s server đã sẵn sàng tại https://{{ mgmt_ip }}:6443"
+
+    - name: Tạo thư mục .kube cho user vagrant
+      ansible.builtin.file:
+        path: /home/vagrant/.kube
+        state: directory
+        owner: vagrant
+        group: vagrant
+        mode: "0755"
+
+    - name: Sao chép kubeconfig cho user vagrant
+      ansible.builtin.copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: /home/vagrant/.kube/config
+        remote_src: true
+        owner: vagrant
+        group: vagrant
+        mode: "0600"

@@ -1,0 +1,7 @@
+# namespace.yaml — namespace chứa toàn bộ CNF workload
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cnf-demo
+  labels:
+    app.kubernetes.io/part-of: cnf-testbed

@@ -1,0 +1,17 @@
+# service.yaml — ClusterIP Service, load-balance tới 3 replica (TC-03)
+apiVersion: v1
+kind: Service
+metadata:
+  name: cnf-demo
+  namespace: cnf-demo
+  labels:
+    app: cnf-demo
+spec:
+  type: ClusterIP
+  selector:
+    app: cnf-demo
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
