@@ -1,57 +1,85 @@
 \section{Introduction}
 
-\subsection{Motivation and Background}
+\subsection{Background: the 5G core has become software}
 
-The telecommunications industry is undergoing a fundamental shift from
-purpose-built, vertically integrated network appliances towards software
-running on commodity computing infrastructure. This transformation,
-formalised by ETSI as \textbf{Network Functions Virtualisation (NFV)},
-decouples network functions (firewalls, routers, load balancers, packet
-gateways, etc.) from the proprietary hardware on which they traditionally
-ran \cite{etsi002}. In parallel, \textbf{Software-Defined Networking (SDN)}
-separates the network control plane from the data plane, enabling
-centralised, programmable network management.
+For decades, a mobile operator's core network was built from specialised,
+purpose-built hardware: a particular box routed subscriber traffic, another
+managed mobility, another enforced policy. Each was a closed appliance from a
+single vendor. With \textbf{5G Standalone (SA)}, this has changed completely.
+The 3GPP 5G core \cite{ts23501} is defined as a set of \textbf{Network
+Functions (NFs)} --- the User Plane Function (UPF), the Access and Mobility
+Management Function (AMF), the Session Management Function (SMF), the Network
+Repository Function (NRF), and others --- that communicate over open,
+service-based interfaces. Crucially, these NFs are now \emph{software}. The
+telecom industry packages them as containers and runs them on Kubernetes,
+turning them into \textbf{Cloud-Native Network Functions (CNFs)}.
 
-The first generation of NFV deployments virtualised network functions as
-Virtual Machines (VMs), managed by OpenStack as the Virtual Infrastructure
-Manager (VIM). More recently the industry has embraced \textbf{cloud-native}
-principles: network functions are packaged as containers and orchestrated by
-Kubernetes, giving rise to \textbf{Cloud-Native Network Functions (CNFs)}
-\cite{etsi022,lfn}. CNFs boot in seconds, consume far fewer resources, and
-inherit Kubernetes' self-healing and horizontal scaling capabilities.
+This shift is the cloud-native culmination of \textbf{Network Functions
+Virtualisation (NFV)}, the architecture standardised by ETSI \cite{etsi002}
+that decouples network functions from the hardware they used to run on. The
+hardware and virtualisation layer underneath the NFs is called the
+\textbf{NFV Infrastructure (NFVI)}; the system that manages it is the
+\textbf{Virtual Infrastructure Manager (VIM)}. In the cloud-native era, the
+NFVI is a pool of servers and the VIM is Kubernetes.
 
-\subsection{Problem Statement}
+\subsection{Problem statement}
 
-Production NFV platforms are large, expensive, and operationally complex,
-which makes them impractical for learning and experimentation. This project
-addresses the question: \emph{can the essential structure and behaviour of
-the ETSI NFV framework be reproduced faithfully on a single personal
-computer?} The challenge is to build a self-contained testbed that
-(i)~maps cleanly onto the ETSI reference architecture, (ii)~exhibits the
-telco-grade separation of management, control, and user planes, and
-(iii)~fits within a hard budget of 16~GB of host RAM.
+A 5G core cannot simply be dropped onto an ordinary Kubernetes cluster and be
+expected to work. The NFs impose demands that a default cluster does not
+satisfy:
+
+\begin{itemize}
+    \item The \textbf{UPF} forwards subscriber data and therefore needs its
+          own \emph{user-plane} network interfaces (3GPP's N3 towards the
+          radio side and N6 towards the Internet), kept separate from ordinary
+          cluster traffic. A standard pod has only one interface --- not
+          enough.
+    \item The stateless control functions must \textbf{scale} with signalling
+          load, and the whole core must be \textbf{observable} so an operator
+          can see whether it is healthy.
+    \item Subscriber state must live somewhere, and the different traffic
+          classes (management, control signalling, user data) must not be
+          mixed on one network.
+\end{itemize}
+
+Building and operating a production NFVI that meets these requirements is
+expensive and complex --- well beyond what a student can stand up to learn
+from. This project therefore asks a focused question:
+\emph{can a faithful, miniature NFVI platform --- one that genuinely satisfies
+the requirements of the 5G core --- be built on a single laptop, and can a
+real 5G core actually run on it?}
+
+The deliverable is explicitly an \textbf{infrastructure platform} (an NFVI /
+container-as-a-service layer for CNFs), \emph{not} a new network application.
+The 5G core is the demanding tenant we use to prove the platform is real.
 
 \subsection{Objectives}
 
 \begin{enumerate}
-    \item Provision a multi-node Kubernetes cluster entirely through
-          Infrastructure-as-Code (Vagrant~+~Ansible).
-    \item Deploy a CNF with \textbf{multi-NIC} networking that separates
-          management, cluster, and data-plane traffic.
-    \item Reproduce the telco three-plane network model using a secondary
-          CNI (Multus~+~macvlan~+~Whereabouts).
-    \item Provide full observability with Prometheus and Grafana.
-    \item Demonstrate horizontal auto-scaling (HPA) and measure real
-          data-plane throughput.
-    \item Establish an explicit mapping between each ETSI NFV building block
-          and its Kubernetes equivalent.
+    \item Provision a multi-node Kubernetes (k3s) cluster entirely through
+          Infrastructure-as-Code (Vagrant + Ansible), acting as the NFVI and
+          VIM.
+    \item Provide the \textbf{multi-NIC, multi-plane} networking the 5G
+          user plane requires, using a secondary CNI
+          (Multus + macvlan + Whereabouts), with management, cluster, and
+          user-plane traffic strictly separated.
+    \item Deploy a \textbf{real 5G SA core} (Open5GS) as a set of CNFs, and
+          simulate the radio access network and a subscriber with UERANSIM.
+    \item Demonstrate, end to end, a UE \textbf{registering} with the core and
+          establishing a \textbf{PDU session} that carries real user-plane
+          traffic through the UPF.
+    \item Provide elastic \textbf{auto-scaling} of stateless NFs and full
+          \textbf{observability} (Prometheus + Grafana) of the running core,
+          all within a hard 16~GB RAM budget.
 \end{enumerate}
 
-\subsection{Report Organisation}
+\subsection{Report organisation}
 
-Section~2 reviews the theoretical background (NFV, SDN, OpenStack, and
-Kubernetes as a cloud-native VIM). Section~3 discusses the migration from
-VM-based VNFs to CNFs and the multi-NIC networking model. Section~4 presents
-the system architecture. Section~5 details the implementation. Section~6
-reports the testing and evaluation across five test cases. Section~7
-concludes and outlines future work.
+Section~2 explains, for a reader new to the topic, the ETSI NFV framework and
+the 5G core as CNFs. Section~3 derives, from the 5G core's needs, the precise
+requirements the platform must meet, and maps each onto a Kubernetes mechanism.
+Section~4 presents the system architecture --- including where each component
+runs and how the design copes with failure. Section~5 details the
+implementation, culminating in the deployment of Open5GS. Section~6 evaluates
+the platform through five test cases driven by the live 5G core. Section~7
+concludes and discusses limitations and future work.

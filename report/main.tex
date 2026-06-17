@@ -87,7 +87,7 @@
 
 \usepackage[colorlinks=true, plainpages=true, linkcolor=istblue, urlcolor=istblue, citecolor=istblue, anchorcolor=istblue]{hyperref}
 
-\title{\textbf{Building a Mini NFVI Stack Emulating the ETSI NFV Architecture with Kubernetes (k3s)}}
+\title{\textbf{A Mini NFVI Platform for Cloud-Native 5G Core Functions: Deploying and Validating Open5GS on Kubernetes (k3s)}}
 \author{Hung Anh To \\ \texttt{github.com/hunganh1310} \\ \small IT3943 - Project III \\ \small Hanoi University of Science and Technology}
 \date{\today}
 
@@ -107,8 +107,8 @@
 
     \textsc{\LARGE REPORT: PROJECT III}\\[0.5cm]
     \HRule\\[0.4cm]
-    {\large \bf Building a Mini NFVI Stack Emulating the ETSI NFV Architecture with Kubernetes (k3s)\\[0.2cm]}
-    \large A Cloud-Native Approach to Network Function Virtualisation
+    {\large \bf A Mini NFVI Platform for Cloud-Native 5G Core Functions:\\Deploying and Validating Open5GS on Kubernetes (k3s)\\[0.2cm]}
+    \large An NFV Infrastructure that hosts a real containerised 5G Standalone core
     \HRule\\[1cm]
 \end{center}
 
@@ -140,22 +140,31 @@
 \newpage
 \begin{abstract}
 \large
-Network Functions Virtualisation (NFV) decouples network functions from
-proprietary hardware, allowing them to run as software on commodity
-infrastructure. This project designs and implements a \textbf{mini NFVI
-(NFV Infrastructure) stack} that emulates the ETSI NFV architectural
-framework at small scale, using cloud-native technologies instead of a
-traditional OpenStack Virtual Infrastructure Manager (VIM). A three-node
-Kubernetes cluster is provisioned with Infrastructure-as-Code (Vagrant and
-Ansible) on a single 16~GB host, running the lightweight k3s distribution.
-A Cloud-Native Network Function (CNF) is deployed with \textbf{multi-NIC
-networking} (Multus~+~macvlan~+~Whereabouts IPAM) to separate the
-management, control, and user (data) planes following telco best practice.
-The platform integrates an observability stack (Prometheus~+~Grafana) and
-horizontal auto-scaling (HPA). Five test cases validate multi-NIC
-connectivity, data-plane throughput, service load balancing, auto-scaling,
-and observability. The work demonstrates a complete, reproducible mapping
-from the ETSI NFV reference model onto Kubernetes primitives.
+The 5G Standalone (SA) core network is no longer a set of specialised
+hardware appliances: its functions --- the User Plane Function (UPF), the
+Access and Mobility Management Function (AMF), the Session Management
+Function (SMF), and others --- are now \textbf{Cloud-Native Network
+Functions (CNFs)}: containers orchestrated by Kubernetes. Running them,
+however, requires more than a plain Kubernetes cluster. A telco-grade
+\textbf{NFV Infrastructure (NFVI)} must provide a dedicated user-plane data
+path with multiple network interfaces per pod, elastic scaling of stateless
+control functions, and end-to-end observability --- none of which vanilla
+Kubernetes offers by default.
+\par
+This project \emph{designs, builds, and validates} such an NFVI platform on a
+single 16~GB laptop, and then \emph{proves it works by running a real 5G core
+on it}. A three-node \textbf{k3s} cluster is provisioned entirely through
+Infrastructure-as-Code (Vagrant + Ansible). A secondary CNI
+(\textbf{Multus + macvlan + Whereabouts}) gives the UPF the separate
+N3/N6 user-plane interfaces it needs, kept strictly isolated from management
+and cluster-signalling traffic. The open-source \textbf{Open5GS} 5G SA core is
+deployed as a set of CNFs, and \textbf{UERANSIM} simulates a gNodeB and a
+subscriber. We then demonstrate, end to end, that a UE registers with the
+core, establishes a PDU session, and exchanges real user-plane traffic that
+traverses the UPF --- alongside autoscaling of stateless network functions and
+a Prometheus/Grafana view of the running core. The report makes explicit, at
+every step, \emph{why} each platform capability exists by tracing it back to a
+concrete requirement of the 5G core it serves.
 \end{abstract}
 
 \newpage
@@ -177,7 +186,19 @@ from the ETSI NFV reference model onto Kubernetes primitives.
 ETSI GS NFV 002 V1.2.1 (2014). \textit{Network Functions Virtualisation (NFV); Architectural Framework}.
 
 \bibitem{etsi022}
-ETSI GR NFV-IFA 022 (2021). \textit{Report on the architecture and mechanisms for Cloud-native VNFs}.
+ETSI GR NFV-IFA 029 (2019). \textit{Report on the Enhancements of the NFV architecture towards Cloud-native and PaaS}.
+
+\bibitem{ts23501}
+3GPP TS 23.501. \textit{System architecture for the 5G System (5GS)} --- Stage 2.
+
+\bibitem{open5gs}
+Open5GS. \textit{Open Source implementation for 5G Core and EPC}. \url{https://open5gs.org}
+
+\bibitem{ueransim}
+A. G\"ung\"or. \textit{UERANSIM --- Open-source 5G UE and gNodeB simulator}. \url{https://github.com/aligungr/UERANSIM}
+
+\bibitem{towards5gs}
+Orange-OpenSource. \textit{towards5gs-helm --- Deploy a 5G end-to-end network (Open5GS + UERANSIM) on Kubernetes}. \url{https://github.com/Orange-OpenSource/towards5gs-helm}
 
 \bibitem{lfn}
 Linux Foundation Networking (2022). \textit{Cloud Native Telecom Initiative}.

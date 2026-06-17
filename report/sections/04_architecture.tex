@@ -1,17 +1,17 @@
 \section{System Architecture}
 
-\subsection{Cluster Topology}
+\subsection{Cluster topology and IP plan}
 
-The testbed consists of three VirtualBox virtual machines provisioned on a
-single Windows~11 host with 16~GB of RAM. One node acts as the k3s control
-plane; the other two are workers that host the CNF workload. Each VM is
-allocated 2~vCPUs and 4~GB of RAM, for a total of 12~GB, leaving 4~GB for the
-host operating system. Figure~\ref{fig:topo} shows the topology and IP plan.
+The NFVI is three VirtualBox VMs on a single Windows~11 / 16~GB host. One node
+(\texttt{node0}) is the k3s control plane and also runs the management tooling;
+\texttt{node1} and \texttt{node2} are workers that host the 5G CNFs. Each VM has
+2~vCPUs and 4~GB of RAM (12~GB total, leaving 4~GB for the host).
+Figure~\ref{fig:topo} shows the topology; Table~\ref{tab:nodes} the addressing.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\textwidth]{Images/cluster_topo.png}
-    \caption{Three-node cluster topology and dual-interface IP plan.}
+    \caption{Three-node cluster: dual interfaces and the role of each node.}
     \label{fig:topo}
 \end{figure}
 
@@ -21,55 +21,97 @@ host operating system. Figure~\ref{fig:topo} shows the topology and IP plan.
 \toprule
 \textbf{Node} & \textbf{Role} & \textbf{eth1 (MGMT)} & \textbf{eth2 (DATA)} \\
 \midrule
-node0 & control-plane (k3s server) & 10.10.10.10 & 10.30.0.10 \\
-node1 & worker (k3s agent)         & 10.10.10.11 & 10.30.0.11 \\
-node2 & worker (k3s agent)         & 10.10.10.12 & 10.30.0.12 \\
+node0 & control-plane + tooling & 10.10.10.10 & 10.30.0.10 \\
+node1 & worker (5G CNFs)        & 10.10.10.11 & 10.30.0.11 \\
+node2 & worker (5G CNFs)        & 10.10.10.12 & 10.30.0.12 \\
 \bottomrule
 \end{tabular}
 \caption{Node roles and per-interface IP addresses.}
 \label{tab:nodes}
 \end{table}
 
-\subsection{Three-Plane Network Design}
+\subsection{Three-plane network design --- and how the 5G interfaces map onto it}
 
-Following telco practice, three logically separate network planes are kept
-strictly isolated, as summarised in Table~\ref{tab:planes}.
+Following telco practice, three network planes are kept strictly isolated
+(Table~\ref{tab:planes}). This is the direct realisation of the control/user
+plane separation described in Section~2.2.
 
 \begin{table}[H]
 \centering
 \begin{tabular}{llll}
 \toprule
-\textbf{Plane} & \textbf{CIDR} & \textbf{Interface} & \textbf{Provider} \\
+\textbf{Plane} & \textbf{CIDR} & \textbf{Interface} & \textbf{Carries} \\
 \midrule
-Management    & 10.10.10.0/24 & eth1       & VirtualBox internal net \texttt{mgmt-net} \\
-K8s cluster   & 10.42.0.0/16  & flannel.1  & Flannel (VXLAN overlay) \\
-Data plane    & 10.30.0.0/24  & eth2 $\rightarrow$ net1 & Multus + macvlan + Whereabouts \\
+Management  & 10.10.10.0/24 & eth1      & SSH, kube-API, telemetry \\
+Cluster     & 10.42.0.0/16  & flannel.1 & pod-to-pod SBI (HTTP/2) \\
+User plane  & 10.30.0.0/16  & eth2      & 5G N2/N3/N4/N6 (macvlan) \\
 \bottomrule
 \end{tabular}
 \caption{The three isolated network planes.}
 \label{tab:planes}
 \end{table}
 
-\begin{itemize}
-    \item The \textbf{management plane} (eth1) carries SSH, the Kubernetes
-          API, and telemetry. k3s is explicitly configured so that the node
-          IP and control-plane signalling use this interface
-          (\texttt{--node-ip}, \texttt{--flannel-iface eth1}).
-    \item The \textbf{cluster plane} is the Flannel VXLAN overlay
-          (10.42.0.0/16) that provides pod-to-pod connectivity for the
-          primary interface \texttt{eth0}.
-    \item The \textbf{data plane} (eth2) is dedicated to user-plane traffic.
-          Pods receive a second interface \texttt{net1} via macvlan, with IPs
-          in the range 10.30.0.100--10.30.0.200 assigned by Whereabouts. No
-          routing is configured between the data plane and the other planes,
-          enforcing isolation.
-\end{itemize}
+The cluster plane (Flannel VXLAN overlay) carries the service-based interface
+traffic between control NFs --- this is signalling, so it rides the ordinary
+pod network. The \textbf{user plane} is the part unique to a telco workload:
+the 5G transport interfaces are realised as macvlan networks on \texttt{eth2}.
+Table~\ref{tab:5gif} shows the mapping; this is the concrete payoff of the
+multi-NIC requirement from Table~\ref{tab:requirements}.
 
-Because the management and data networks are VirtualBox \emph{internal}
-networks, the Windows host has no route into them; Grafana is therefore
-reached through an SSH tunnel (Section~5.5).
+\begin{table}[H]
+\centering
+\begin{tabular}{lllp{0.30\textwidth}}
+\toprule
+\textbf{5G if.} & \textbf{Subnet (on eth2)} & \textbf{Between} & \textbf{Purpose} \\
+\midrule
+N2 & 10.30.20.0/24 & AMF $\leftrightarrow$ gNB & NGAP control signalling \\
+N3 & 10.30.30.0/24 & gNB $\leftrightarrow$ UPF & GTP-U user data (uplink) \\
+N4 & 10.30.40.0/24 & SMF $\leftrightarrow$ UPF & PFCP session control \\
+N6 & 10.30.60.0/24 & UPF $\leftrightarrow$ DN  & user data to data network \\
+\bottomrule
+\end{tabular}
+\caption{5G core interfaces realised as macvlan networks on the data NIC.}
+\label{tab:5gif}
+\end{table}
 
-\subsection{Technology Stack}
+Each subnet is a NetworkAttachmentDefinition created by the deployment chart,
+with addresses assigned by Whereabouts. The UPF pod therefore comes up with
+\texttt{eth0} (SBI), plus \texttt{n3}, \texttt{n4}, and \texttt{n6}
+interfaces --- precisely what a real UPF requires. Because the data NIC is a
+VirtualBox \emph{internal} network with promiscuous mode enabled, macvlan
+traffic flows correctly even when the gNB and UPF land on different worker
+nodes.
+
+\subsection{Where things run, and what happens when a node fails}
+
+\emph{(This subsection answers questions a strict examiner will ask.)}
+
+\paragraph{Placement.} The Kubernetes scheduler places pods on workers
+(\texttt{node1}/\texttt{node2}). The 5G CNFs and the Prometheus/Grafana stack
+run as ordinary pods and may land on either worker; the scheduler rebalances
+them after a failure. The k3s server components and the management tooling run
+on \texttt{node0}. Grafana is thus \emph{not} a fixed box on a specific node: it
+is a pod, reachable through a stable Service (NodePort~30030) regardless of
+which worker currently hosts it.
+
+\paragraph{Single control-plane node --- a deliberate trade-off.}
+\texttt{node0} is the only control-plane node, which makes it a single point of
+failure (SPOF). If \texttt{node0} is lost, the cluster keeps \emph{running}
+existing workloads --- the 5G core on the workers continues to forward
+traffic --- but no new scheduling, scaling, or API operations are possible
+until it returns. This is an accepted trade-off for a 16~GB host: a
+production-grade highly-available control plane needs an odd number
+($\geq 3$) of server nodes running embedded etcd, which alone would exhaust the
+RAM budget. The design is honest about this: HA is a configuration change in
+k3s (add two more \texttt{server} nodes), listed in Future Work, not an
+architectural rewrite.
+
+\paragraph{Stateful data.} The one stateful component is MongoDB (subscriber
+records). For the testbed it uses \texttt{emptyDir}, so subscribers must be
+re-provisioned after a restart --- acceptable here, but a real platform would
+back it with a persistent volume.
+
+\subsection{Technology stack}
 
 \begin{table}[H]
 \centering
@@ -77,34 +119,26 @@ reached through an SSH tunnel (Section~5.5).
 \toprule
 \textbf{Layer} & \textbf{Technology} \\
 \midrule
-Hypervisor / IaC       & VirtualBox, Vagrant, Ansible \\
-Kubernetes distribution & k3s (embedded datastore) \\
-Primary CNI            & Flannel (VXLAN) \\
-Secondary CNI          & Multus + macvlan + Whereabouts \\
-Package management      & Helm \\
-Observability          & kube-prometheus-stack (Prometheus, Grafana, exporters) \\
-Auto-scaling           & HorizontalPodAutoscaler + metrics-server \\
-Throughput testing     & iperf3 \\
+Hypervisor / IaC        & VirtualBox, Vagrant, Ansible \\
+VIM (Kubernetes)        & k3s (embedded datastore) \\
+Primary CNI             & Flannel (VXLAN) --- SBI / cluster plane \\
+Secondary CNI           & Multus + macvlan + Whereabouts --- user plane \\
+5G core (CNFs)          & Open5GS 5G SA \\
+Simulated RAN + UE      & UERANSIM \\
+Packaging (VNFM)        & Helm (towards5gs-helm charts) \\
+Observability           & kube-prometheus-stack (Prometheus, Grafana) \\
+Auto-scaling            & HorizontalPodAutoscaler + metrics-server \\
 \bottomrule
 \end{tabular}
 \caption{Technology stack by layer.}
 \label{tab:stack}
 \end{table}
 
-\subsection{Resource Constraints and Optimisations}
+\subsection{Resource constraints and optimisations}
 
-The 16~GB host budget drives several deliberate optimisations:
-
-\begin{itemize}
-    \item \textbf{k3s instead of kubeadm} --- a single lightweight binary
-          with an embedded datastore avoids the overhead of a full etcd
-          control plane.
-    \item \textbf{Alertmanager disabled} and \textbf{persistence disabled}
-          (\texttt{emptyDir}) in the monitoring stack.
-    \item \textbf{Prometheus retention reduced to 2~days} and unused
-          scrape targets (etcd, kube-proxy, scheduler) turned off.
-    \item \textbf{Grafana exposed via NodePort}, not a LoadBalancer, and
-          reached through an SSH tunnel.
-    \item \textbf{The thin Multus plugin} is used in preference to the thick
-          (daemon-based) variant to minimise the per-node memory footprint.
-\end{itemize}
+The 16~GB budget drives deliberate choices: \textbf{k3s} instead of kubeadm
+(one light binary, embedded datastore); \textbf{Alertmanager and persistence
+disabled} and Prometheus retention cut to 2~days; \textbf{Grafana via NodePort}
+plus SSH tunnel rather than a LoadBalancer; the \textbf{thin Multus} variant;
+and tight CPU/memory \texttt{requests} on every NF so the whole core
+co-exists with the monitoring stack on 8~GB of worker RAM.

@@ -1,127 +1,107 @@
 \section{Implementation}
 
-The entire testbed is built from version-controlled Infrastructure-as-Code.
-The build proceeds in five stages: infrastructure provisioning, cluster
-bootstrap, secondary CNI installation, CNF deployment, and the observability
-stack.
+The platform is built entirely from version-controlled Infrastructure-as-Code,
+in six stages: provision the VMs, bootstrap the cluster, install the secondary
+CNI, deploy the 5G core, attach a simulated RAN, and add observability. The
+first three build the \emph{NFVI}; the last three put a real 5G core on it.
 
-\subsection{Infrastructure as Code (Vagrantfile)}
+\subsection{Infrastructure as Code (Vagrant)}
 
-A single \texttt{Vagrantfile} declares the three VMs, each with two private
-internal networks corresponding to the management and data planes. A common
-\texttt{bootstrap.sh} provisioner disables swap, loads the
-\texttt{br\_netfilter} and \texttt{overlay} kernel modules, applies the
-sysctl settings required by Kubernetes, and configures a reliable upstream
-DNS resolver.
+A single \texttt{Vagrantfile} declares the three VMs, each with two internal
+networks (management and data). Critically, promiscuous mode is enabled on the
+data NIC so macvlan works across nodes. A common \texttt{bootstrap.sh} disables
+swap, loads the \texttt{br\_netfilter} and \texttt{overlay} kernel modules,
+applies the Kubernetes sysctls, and sets a reliable DNS resolver.
 
-\begin{lstlisting}[language=Ruby, caption=Per-node network definition (excerpt from Vagrantfile)]
-config.vm.define "node0" do |node|
-  node.vm.hostname = "node0"
-  node.vm.network "private_network",
-    ip: "10.10.10.10", virtualbox__intnet: "mgmt-net"   # eth1
-  node.vm.network "private_network",
-    ip: "10.30.0.10",  virtualbox__intnet: "data-net"   # eth2
-  node.vm.provision "shell", path: "scripts/bootstrap.sh"
+\begin{lstlisting}[language=Ruby, caption=Per-node network + promiscuous mode (excerpt)]
+config.vm.provider "virtualbox" do |vb|
+  vb.cpus = 2 ; vb.memory = 4096
+  # macvlan cross-node trên data NIC (nic3 = eth2) cần nhận frame của MAC con
+  vb.customize ["modifyvm", :id, "--nicpromisc3", "allow-all"]
 end
+node.vm.network "private_network", ip: "10.10.10.10", virtualbox__intnet: "mgmt-net"  # eth1
+node.vm.network "private_network", ip: "10.30.0.10",  virtualbox__intnet: "data-net"  # eth2
 \end{lstlisting}
 
-\subsection{Cluster Provisioning (Ansible)}
+\subsection{Cluster provisioning (Ansible / k3s)}
 
-Two idempotent Ansible playbooks install the cluster. \texttt{k3s-master.yml}
-installs the k3s server on node0, pinning the node IP and Flannel interface
-to the management network so that control-plane signalling never traverses
-the data plane. Traefik and the bundled service load balancer are disabled to
-save memory, while metrics-server is retained because the HPA depends on it.
+Two idempotent playbooks install the cluster. \texttt{k3s-master.yml} installs
+the k3s server on node0, pinning the node IP and Flannel interface to the
+management network so control-plane signalling never crosses the data plane.
+Traefik and the bundled load balancer are disabled to save RAM; metrics-server
+is kept because the HPA needs it.
 
 \begin{lstlisting}[language=bash, caption=k3s server install flags]
 INSTALL_K3S_EXEC="server \
-  --node-ip 10.10.10.10 \
-  --advertise-address 10.10.10.10 \
-  --flannel-iface eth1 \
-  --disable traefik --disable servicelb \
+  --node-ip 10.10.10.10 --advertise-address 10.10.10.10 \
+  --flannel-iface eth1 --disable traefik --disable servicelb \
   --write-kubeconfig-mode 644 --tls-san 10.10.10.10"
 \end{lstlisting}
 
-\texttt{k3s-worker.yml} reads the node-token from the server and joins node1
-and node2 as agents, again binding them to the management interface. After
-this stage \texttt{kubectl get nodes} reports three \texttt{Ready} nodes.
+\texttt{k3s-worker.yml} joins node1 and node2 as agents on the management
+interface. After this stage \texttt{kubectl get nodes} shows three
+\texttt{Ready} nodes --- the NFVI compute is live.
 
 \subsection{Secondary CNI (Multus + Whereabouts)}
 
-The \texttt{cni.yml} playbook installs the thin Multus daemonset and the
-Whereabouts IPAM. Two k3s-specific adaptations are required:
+\texttt{cni.yml} installs the thin Multus daemonset and Whereabouts IPAM. Two
+k3s-specific adaptations are required: (i)~the \texttt{hostPath} values are
+rewritten to k3s's CNI directories
+(\texttt{/var/lib/rancher/k3s/\ldots}) without touching the in-container mount
+paths; and (ii)~\texttt{macvlan} (plus \texttt{static}, \texttt{ipvlan}) are
+symlinked onto the k3s multicall CNI binary on every node, since k3s ships
+symlinks for only a subset of plugins. This is the infrastructure that will let
+the UPF obtain its user-plane interfaces.
 
-\begin{enumerate}
-    \item \textbf{CNI paths.} k3s stores CNI binaries in
-          \texttt{/var/lib/rancher/k3s/data/current/bin} and CNI
-          configuration in
-          \texttt{/var/lib/rancher/k3s/agent/etc/cni/net.d}, rather than the
-          upstream defaults. The \texttt{hostPath} values in the daemonsets
-          are rewritten accordingly --- taking care \emph{not} to rewrite the
-          in-container mount paths (\texttt{/host/opt/cni/bin}), which would
-          otherwise break the binary-installation step.
-    \item \textbf{Missing plugins.} The k3s multicall CNI binary ships
-          symlinks for only a subset of plugins; \texttt{macvlan} (and
-          \texttt{static}, \texttt{ipvlan}) are symlinked onto the multicall
-          binary on every node.
-\end{enumerate}
+\subsection{Deploying the 5G core (Open5GS)}
 
-The data-plane network is then declared as a NetworkAttachmentDefinition:
+The 5G core is deployed as CNFs using the community
+\texttt{towards5gs-helm} charts \cite{towards5gs}, which package Open5GS for
+Kubernetes with Multus. The \texttt{open5gs.yml} playbook installs the core
+with a values file tuned for this testbed: the N2/N3/N4/N6 networks are bound to
+\texttt{eth2} (Section~4.2), every NF is given small CPU/memory requests, and
+MongoDB persistence is disabled.
 
-\begin{lstlisting}[language=yaml, caption=NetworkAttachmentDefinition for net1 (macvlan + Whereabouts)]
-apiVersion: k8s.cni.cncf.io/v1
-kind: NetworkAttachmentDefinition
-metadata: { name: net1, namespace: cnf-demo }
-spec:
-  config: |
-    {
-      "cniVersion": "0.3.1",
-      "type": "macvlan",
-      "master": "eth2",
-      "mode": "bridge",
-      "ipam": {
-        "type": "whereabouts",
-        "range": "10.30.0.0/24",
-        "range_start": "10.30.0.100",
-        "range_end": "10.30.0.200"
-      }
-    }
+\begin{lstlisting}[language=yaml, caption=open5gs-values.yaml --- binding 5G interfaces to the data NIC (excerpt)]
+global:
+  n3network: { masterIf: eth2, subnetIP: 10.30.30.0, cidr: 24 }   # GTP-U
+  n6network: { masterIf: eth2, subnetIP: 10.30.60.0, cidr: 24 }   # to DN
+upf:
+  n3if: { ipAddress: 10.30.30.10 }
+  n4if: { ipAddress: 10.30.40.10 }
+  n6if: { ipAddress: 10.30.60.10 }
+  config: { upf: { pdn: [ { addr: 10.45.0.1/16, dnn: internet } ] } }  # IP pool cấp cho UE
 \end{lstlisting}
 
-\subsection{CNF Deployment}
+After \texttt{helm install}, \texttt{kubectl get pods -n open5gs} shows the
+full core --- NRF, SCP, AMF, SMF, UPF, AUSF, UDM, UDR, PCF, NSSF, BSF, and
+MongoDB --- each as its own Deployment. The NFs register with the NRF over SBI;
+the UPF comes up with its \texttt{n3}/\texttt{n4}/\texttt{n6} interfaces.
 
-The CNF is a lightweight \texttt{whoami} web server deployed as a Deployment
-of three replicas in the \texttt{cnf-demo} namespace. Each pod requests the
-data-plane interface through an annotation and declares a CPU request so the
-HPA can compute utilisation.
+\subsection{Simulated RAN and subscriber provisioning (UERANSIM)}
 
-\begin{lstlisting}[language=yaml, caption=CNF pod template (excerpt)]
-template:
-  metadata:
-    annotations:
-      k8s.v1.cni.cncf.io/networks: net1     # Multus attaches data plane
-  spec:
-    containers:
-      - name: whoami
-        image: traefik/whoami:v1.10.2
-        resources:
-          requests: { cpu: 50m, memory: 16Mi }   # required for HPA
-          limits:   { cpu: 200m, memory: 64Mi }
+A real UE requires a SIM record (IMSI, key, OPc) in the subscriber database.
+A Kubernetes \texttt{Job} runs \texttt{open5gs-dbctl} to insert one test
+subscriber (IMSI \texttt{001010000000001}) into MongoDB. \textbf{UERANSIM} is
+then deployed (the \texttt{ueransim} chart) as a gNodeB plus a UE whose
+identity matches that subscriber. The gNB attaches to the AMF over N2; the UE
+performs registration and requests a PDU session.
+
+\begin{lstlisting}[language=bash, caption=Order of deployment (Ansible open5gs.yml)]
+helm install open5gs charts/open5gs   -n open5gs -f helm/open5gs-values.yaml
+kubectl apply -f manifests/open5gs/subscriber-job.yaml   # nap SIM vao MongoDB
+helm install ueransim charts/ueransim -n open5gs -f helm/ueransim-values.yaml
 \end{lstlisting}
 
-A ClusterIP Service fronts the three replicas and provides round-robin load
-balancing, and a HorizontalPodAutoscaler scales the deployment between 3 and
-6 replicas at a 70\% CPU-utilisation target.
+\subsection{Observability and access}
 
-\subsection{Observability Stack}
+The \texttt{kube-prometheus-stack} chart is installed into the
+\texttt{monitoring} namespace with a RAM-tuned values file (Alertmanager off,
+persistence off, retention 2~days, Grafana on NodePort~30030). Because the
+cluster networks are VirtualBox internal networks with no route from the host,
+Grafana is reached through an SSH tunnel:
 
-The \texttt{kube-prometheus-stack} Helm chart is installed into the
-\texttt{monitoring} namespace with a values file tuned for the RAM budget:
-Alertmanager off, persistence off, Prometheus retention 2~days, and Grafana
-exposed via NodePort~30030. Because the cluster networks are not routable
-from the host, Grafana is accessed through an SSH tunnel:
-
-\begin{lstlisting}[language=bash, caption=SSH tunnel for Grafana access]
-ssh -L 3000:10.10.10.10:30030 vagrant@10.10.10.10 -N
+\begin{lstlisting}[language=bash, caption=SSH tunnel for Grafana access (PowerShell on Windows host)]
+vagrant ssh node0 -- -N -L 3000:localhost:30030
 # then browse http://localhost:3000  (admin / admin)
 \end{lstlisting}

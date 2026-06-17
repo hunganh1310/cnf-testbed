@@ -13,19 +13,21 @@ cnf-testbed/
 |       |-- k3s-master.yml      # k3s server (node0)
 |       |-- k3s-worker.yml      # join node1, node2
 |       |-- cni.yml             # Multus + Whereabouts + NAD
-|       `-- monitoring.yml      # kube-prometheus-stack
+|       |-- monitoring.yml      # kube-prometheus-stack
+|       `-- open5gs.yml         # 5G core (Open5GS) + RAN (UERANSIM)
 |-- helm/
-|   `-- monitoring-values.yaml  # RAM-optimised values
+|   |-- monitoring-values.yaml  # RAM-optimised Prometheus/Grafana
+|   |-- open5gs-values.yaml     # 5G core: N2/N3/N4/N6 on eth2, RAM-tuned
+|   `-- ueransim-values.yaml    # gNB + UE (matches test subscriber)
 |-- manifests/
-|   `-- cnf-demo/
-|       |-- namespace.yaml
-|       |-- nad.yaml            # NetworkAttachmentDefinition net1
-|       |-- deployment.yaml     # CNF workload (replicas=3)
-|       |-- service.yaml        # ClusterIP
-|       `-- hpa.yaml            # HorizontalPodAutoscaler
+|   |-- open5gs/
+|   |   |-- namespace.yaml
+|   |   |-- subscriber-job.yaml # provision test SIM into MongoDB
+|   |   `-- hpa-nrf.yaml        # HPA on stateless NRF
+|   `-- cnf-demo/               # generic synthetic CNF (mechanics demo)
 |-- tests/
-|   |-- iperf3-server.yaml
-|   `-- iperf3-client.yaml
+|   |-- 5g-tests.sh            # TC-01..TC-05 driven by the live 5G core
+|   `-- selftest.sh
 `-- report/                     # this LaTeX report
 \end{lstlisting}
 
@@ -50,19 +52,33 @@ kubeScheduler:       { enabled: false }
 kubeProxy:           { enabled: false }
 \end{lstlisting}
 
-\subsection{HorizontalPodAutoscaler}
+\subsection{HPA on the stateless NRF}
 
-\begin{lstlisting}[language=yaml, caption=manifests/cnf-demo/hpa.yaml (excerpt)]
+\begin{lstlisting}[language=yaml, caption=manifests/open5gs/hpa-nrf.yaml (excerpt)]
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: cnf-demo
-  minReplicas: 3
-  maxReplicas: 6
+    name: open5gs-nrf       # NF stateless -> an toan de scale ngang
+  minReplicas: 1
+  maxReplicas: 4
   metrics:
     - type: Resource
       resource:
         name: cpu
         target: { type: Utilization, averageUtilization: 70 }
+\end{lstlisting}
+
+\subsection{5G interface binding (Open5GS values)}
+
+\begin{lstlisting}[language=yaml, caption=helm/open5gs-values.yaml (excerpt)]
+global:
+  n2network: { masterIf: eth2, subnetIP: 10.30.20.0, cidr: 24 }  # NGAP
+  n3network: { masterIf: eth2, subnetIP: 10.30.30.0, cidr: 24 }  # GTP-U
+  n4network: { masterIf: eth2, subnetIP: 10.30.40.0, cidr: 24 }  # PFCP
+  n6network: { masterIf: eth2, subnetIP: 10.30.60.0, cidr: 24 }  # to DN
+upf:
+  n3if: { ipAddress: 10.30.30.10 }
+  n4if: { ipAddress: 10.30.40.10 }
+  n6if: { ipAddress: 10.30.60.10 }
 \end{lstlisting}

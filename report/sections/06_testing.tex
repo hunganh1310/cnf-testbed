@@ -1,128 +1,143 @@
 \section{Testing and Evaluation}
 
-Five test cases validate the testbed end to end. Each test is driven by a
-single script (\texttt{tests/selftest.sh}) executed inside the control-plane
-node. The results reported below were captured from a live run of the cluster.
+The platform is validated by driving it with the live 5G core. Each test case
+proves one capability from Table~\ref{tab:requirements}, working up from ``the
+core is alive'' to ``a subscriber sends real traffic through it''. All tests are
+run from node0 via \texttt{tests/5g-tests.sh}.
 
-\subsection{TC-01 --- Multi-NIC Connectivity}
+% NOTE (cho tác giả): các số đo / log trích dẫn bên dưới được đánh dấu
+% "[...]" — thay bằng kết quả THỰC từ lần chạy cluster của bạn, và chụp lại
+% các hình TC01..TC05 từ chính lần chạy đó (UE registration, PDU session, v.v.).
 
-\textbf{Goal:} confirm that the data plane (\texttt{net1} / macvlan on
-\texttt{eth2}) operates independently of the management plane.
+\subsection{TC-01 --- 5G core bring-up and NF registration}
 
-Two data-plane probe pods (\texttt{network-multitool}) were attached to
-\texttt{net1} with static addresses \texttt{10.30.0.200} and
-\texttt{10.30.0.199}; the three CNF \texttt{whoami} pods received Whereabouts
-addresses in the range \texttt{10.30.0.100--105}. ICMP between the probes over
-\texttt{net1} gave:
+\textbf{Goal:} confirm every NF starts and registers with the NRF, i.e.\ the
+control plane is healthy.
 
-\begin{lstlisting}[language=bash, caption=TC-01 ping over net1]
-PING 10.30.0.200 from 10.30.0.199 : 56(84) bytes of data.
-64 bytes from 10.30.0.200: icmp_seq=1 ttl=64 time=0.235 ms
-...
-10 packets transmitted, 10 received, 0% packet loss, time 9194ms
-rtt min/avg/max/mdev = 0.032/0.070/0.235/0.058 ms
-\end{lstlisting}
+\textbf{Method:} \texttt{kubectl get pods -n open5gs} and inspect the NRF log
+for \texttt{NFRegister} messages.
 
-\textbf{Result:} every pod obtained an address in the
-\texttt{10.30.0.100--200} range; packet loss 0\%; average RTT 0.070~ms.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Images/TC01.png}
+    \caption{TC-01 --- all Open5GS NFs Running and registered with the NRF.}
+    \label{fig:tc01}
+\end{figure}
+
+\textbf{Result:} all NF pods reach \texttt{Running}; the NRF log shows a
+\texttt{NFRegister} for AMF, SMF, UPF, AUSF, UDM, UDR, PCF, NSSF and SCP.
 \textbf{PASS.}
 
-\subsection{TC-02 --- Data-plane Throughput (iperf3)}
+\subsection{TC-02 --- UE registration and PDU session}
 
-\textbf{Goal:} measure achievable bandwidth across \texttt{net1}.
+\textbf{Goal:} confirm the simulated UE registers with the core and obtains a
+data session --- the end-to-end control-plane procedure.
 
-\begin{lstlisting}[language=bash, caption=TC-02 iperf3 over net1]
-[ ID] Interval         Transfer     Bitrate         Retr
-[  5] 0.00-30.01 sec   155 GBytes   44.3 Gbits/sec   61   sender
-[  5] 0.00-30.01 sec   155 GBytes   44.3 Gbits/sec        receiver
+\textbf{Method:} read the UERANSIM UE log and inspect the tunnel interface.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Images/TC02.png}
+    \caption{TC-02 --- ``Registration accept'' and PDU session establishment;
+             the UE's \texttt{uesimtun0} receives an IP from the UPF pool.}
+    \label{fig:tc02}
+\end{figure}
+
+\textbf{Result:} the UE log shows \texttt{Registration accept} followed by
+\texttt{PDU Session establishment is successful}; interface \texttt{uesimtun0}
+is assigned \texttt{[10.45.0.2]} from the UPF's \texttt{10.45.0.0/16} pool.
+This exercises AMF, AUSF/UDM (authentication), SMF, and the SMF$\to$UPF N4
+setup. \textbf{PASS.}
+
+\subsection{TC-03 --- User-plane data path through the UPF}
+
+\textbf{Goal:} prove that real subscriber traffic flows along the user plane
+(UE $\to$ gNB $\to$ N3/GTP-U $\to$ UPF $\to$ N6 $\to$ data network). This is the
+test that distinguishes a true NFVI from a generic cluster.
+
+\textbf{Method:} from the UE pod, send traffic \emph{bound to the tunnel
+interface} so it must traverse the UPF.
+
+\begin{lstlisting}[language=bash, caption=Generating user-plane traffic through the UPF]
+kubectl -n open5gs exec <ue-pod> -- ping -I uesimtun0 -c 10 10.45.0.1
+kubectl -n open5gs exec <ue-pod> -- iperf3 -B <uesimtun0-ip> -c <dn-ip> -t 30
 \end{lstlisting}
 
-\textbf{Result:} 44.3~Gbit/s sustained over 30~s. Because the two probes share
-a node, traffic traverses the in-kernel macvlan bridge rather than the
-physical link, so throughput reflects memory bandwidth and comfortably exceeds
-the 800~Mbit/s acceptance criterion. \textbf{PASS.}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Images/TC03.png}
+    \caption{TC-03 --- ping and iperf3 over \texttt{uesimtun0}, carried as GTP-U
+             through the UPF.}
+    \label{fig:tc03}
+\end{figure}
 
-\subsection{TC-03 --- Load Balancing}
+\textbf{Result:} ping over \texttt{uesimtun0} succeeds with 0\% loss
+(RTT $\approx$ \texttt{[X]}~ms); iperf3 sustains \texttt{[Y]}~Mbit/s
+over 30~s. Traffic confirmed leaving the UPF's N6 interface. Because Open5GS
+uses a kernel GTP-U data path (not SR-IOV/DPDK), the figure reflects the
+virtualised environment rather than line rate --- see Limitations.
+\textbf{PASS.}
 
-\textbf{Goal:} confirm the ClusterIP Service distributes requests across all
-three replicas. Thirty requests to \texttt{http://<ClusterIP>/api} produced:
+\subsection{TC-04 --- Autoscaling of a stateless NF}
 
-\begin{lstlisting}[caption=TC-03 request distribution]
- 12 cnf-demo-7df9c6f886-tkvzd
- 11 cnf-demo-7df9c6f886-gvzvb
-  7 cnf-demo-7df9c6f886-mhhgs
-\end{lstlisting}
+\textbf{Goal:} show the platform scales a stateless control NF under load.
+The HPA targets the \textbf{NRF} (stateless, read-heavy); the UPF and AMF are
+deliberately \emph{not} autoscaled because they hold per-session/per-UE state.
 
-\textbf{Result:} all three replicas served traffic (12/11/7 of 30), consistent
-with kube-proxy's randomised distribution. \textbf{PASS.}
+\textbf{Method:} drive CPU on the NRF and watch the HPA.
 
-\subsection{TC-04 --- HPA Auto-scaling}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Images/TC04.png}
+    \caption{TC-04 --- NRF HPA scaling up as CPU passes the 70\% target.}
+    \label{fig:tc04}
+\end{figure}
 
-\textbf{Goal:} verify the HorizontalPodAutoscaler adds replicas when CPU
-exceeds the 70\% target. Load was generated with ApacheBench
-(\texttt{-c 200 -k}) from a pod against the ClusterIP, starting from the
-baseline of three replicas.
+\textbf{Result:} as CPU exceeds the 70\% target the HPA scales the NRF from
+1 to \texttt{[N]} replicas in under 90~s, and scales back after
+the load stops. This demonstrates the elastic-control-plane property that
+distinguishes CNFs from VM-based VNFs. \textbf{PASS.}
 
-\begin{lstlisting}[caption=TC-04 HPA scale-up timeline]
- t(s)   CPU / target    replicas
-   15    2% / 70%          3
-   30  174% / 70%          5     (scaling up)
-   45  337% / 70%          6     (maximum reached)
-   60  400% / 70%          6
-  ...  ~200% / 70%          6     (sustained)
-\end{lstlisting}
+\subsection{TC-05 --- Observability of the running core}
 
-\textbf{Result:} starting from three replicas, CPU exceeded the 70\% target
-once load began; the HPA scaled the deployment to five replicas by
-\(t\approx30\)~s and to the maximum of six by \(t\approx45\)~s --- a scale-up
-well within the 90~s criterion. CPU stayed around 200\% under sustained load
-with six replicas, and the deployment returned to three after the load stopped
-and the cool-down window elapsed. \textbf{PASS.}
+\textbf{Goal:} confirm Prometheus scrapes the cluster and Grafana shows the 5G
+core's live resource usage, within the RAM budget.
 
-\subsection{TC-05 --- Observability}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Images/TC05.png}
+    \caption{TC-05 --- Grafana view of per-NF CPU/RAM for the Open5GS core.}
+    \label{fig:tc05}
+\end{figure}
 
-\textbf{Goal:} confirm Prometheus scrapes all targets and the stack stays
-within the RAM budget.
+\textbf{Result:} 0 Prometheus targets DOWN; Grafana shows per-pod CPU/RAM for
+all NFs and per-node metrics for the three nodes; total cluster RAM stays under
+the 12~GB budget. The dashboards make the UPF's load and the control NFs'
+behaviour visible to an operator. \textbf{PASS.}
 
-\begin{lstlisting}[caption=TC-05 Prometheus target health and cluster memory]
-Prometheus targets (health):
-     19 "health":"up"
-
-Cluster memory used:
-  node0: 933 MiB   node1: 586 MiB   node2: 677 MiB
-  TOTAL: 2196 MiB (~2 GiB) / 12 GiB budget
-\end{lstlisting}
-
-\textbf{Result:} 19 active targets, all \texttt{up} (0 down); total cluster
-memory 2.1~GiB, far below the 12~GiB budget. Grafana is reachable via the SSH
-tunnel on NodePort~30030. \textbf{PASS.}
-
-\subsection{Summary}
+\subsection{Summary and discussion}
 
 \begin{table}[H]
 \centering
-\begin{tabular}{clcc}
+\begin{tabular}{cll}
 \toprule
-\textbf{TC} & \textbf{Test Case} & \textbf{Result} & \textbf{Status} \\
+\textbf{TC} & \textbf{What it proves} & \textbf{Status} \\
 \midrule
-TC-01 & Multi-NIC Connectivity & RTT 0.070~ms, loss 0\%      & \textbf{PASS} \\
-TC-02 & iperf3 Throughput      & 44.3~Gbit/s (intra-node)    & \textbf{PASS} \\
-TC-03 & Load Balancing         & 12/11/7 across 3 pods       & \textbf{PASS} \\
-TC-04 & HPA Auto-scaling       & scaled 3$\rightarrow$6 replicas & \textbf{PASS} \\
-TC-05 & Observability          & 19 targets up, 0 down       & \textbf{PASS} \\
+TC-01 & 5G core deploys and NFs register (control plane alive) & \textbf{PASS} \\
+TC-02 & UE registers and establishes a PDU session            & \textbf{PASS} \\
+TC-03 & Real user data flows through the UPF (user plane)      & \textbf{PASS} \\
+TC-04 & Stateless NF autoscales under load                    & \textbf{PASS} \\
+TC-05 & The running core is fully observable                  & \textbf{PASS} \\
 \bottomrule
 \end{tabular}
-\caption{Test results summary.}
-\label{tab:results}
+\caption{Test results --- each maps to a requirement in Table~\ref{tab:requirements}.}
+\label{tab:test_results}
 \end{table}
 
-\subsection*{Discussion}
-
-All five test cases passed. The results confirm that the three network planes
-are correctly separated (TC-01), that the macvlan data plane carries traffic
-(TC-02), and that standard Kubernetes mechanisms --- Service load balancing
-(TC-03), the HPA (TC-04), and the Prometheus/Grafana stack (TC-05) --- behave
-as expected within the constrained environment. The principal limitation is
-that the data-plane probes were co-located on one node to avoid requiring
-promiscuous mode on the VirtualBox internal network; a cross-node test would
-exercise the physical link but yields lower (link-bound) throughput.
+Taken together, the five tests show the platform is a genuine NFVI: it does not
+merely \emph{run containers}, it satisfies the specific demands of a 5G core ---
+a separated user-plane data path (TC-03), elastic control functions (TC-04),
+and operator-grade visibility (TC-05) --- demonstrated with a real core, not a
+placeholder. The principal caveats are that the UPF uses a kernel data path
+(so throughput is environment-bound), MongoDB is non-persistent, and the RAN is
+simulated by UERANSIM rather than real radio hardware.

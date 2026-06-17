@@ -1,81 +1,85 @@
-\section{Theoretical Background}
+\section{Background}
 
-\subsection{The ETSI NFV Architectural Framework}
+This section gives a reader unfamiliar with the field exactly the concepts
+needed to follow the rest of the report: the ETSI NFV framework (what an NFVI
+is), and the 5G core as a set of cloud-native functions (what runs \emph{on}
+the NFVI). We deliberately keep it short and concrete --- only what the design
+later depends on.
 
-The European Telecommunications Standards Institute (ETSI) defined the
-reference architecture for NFV in GS~NFV~002 \cite{etsi002}. It is organised
-into three working domains, illustrated in Figure~\ref{fig:etsi}.
+\subsection{The ETSI NFV framework: who provides, who consumes}
+
+ETSI's reference architecture \cite{etsi002} separates the system into three
+domains, shown in Figure~\ref{fig:etsi}.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\textwidth]{Images/etsi_nfv_arch.png}
-    \caption{ETSI NFV architectural framework and its mapping to this testbed.}
+    \caption{ETSI NFV framework and how this project realises each block.}
     \label{fig:etsi}
 \end{figure}
 
 \begin{itemize}
-    \item \textbf{NFVI (NFV Infrastructure)} --- the totality of hardware
-          (compute, storage, network) and the virtualisation layer on which
-          VNFs execute. It provides the virtual resources consumed by network
-          functions.
-    \item \textbf{VNF (Virtualised Network Function)} --- a software
-          implementation of a network function that runs on the NFVI. A VNF
-          may be decomposed into multiple components (VNFCs).
-    \item \textbf{MANO (Management and Orchestration)} --- comprising the
-          \textbf{VIM} (manages NFVI resources), the \textbf{VNFM} (manages
-          the VNF lifecycle), and the \textbf{NFVO} (orchestrates network
-          services across multiple VNFs and VIMs).
+    \item \textbf{NFVI} --- the infrastructure: compute, storage, and network,
+          plus the virtualisation layer. It is the \emph{provider} of
+          resources. In this project the NFVI is the three-node k3s cluster.
+    \item \textbf{VNF / CNF} --- the network functions themselves, the
+          \emph{consumers} of the infrastructure. Here they are the Open5GS 5G
+          core functions, running as containers.
+    \item \textbf{MANO} (Management and Orchestration) --- the \textbf{VIM}
+          manages NFVI resources (this is Kubernetes/k3s), the \textbf{VNFM}
+          manages the lifecycle of each function (here, Helm), and the
+          \textbf{NFVO} orchestrates end-to-end network services.
 \end{itemize}
 
-\subsection{SDN: Control- and Data-Plane Separation}
+The single most important idea is the provider/consumer split: \emph{this
+project builds the provider (NFVI) and validates it with a real consumer (the
+5G core).} That distinction is what was missing from a naive reading of ``a
+three-node cluster''.
 
-Software-Defined Networking is a complementary paradigm that decouples the
-\textbf{control plane} (which decides how traffic is forwarded) from the
-\textbf{data plane} (which actually forwards packets). This separation is
-central to NFV: it allows network functions to be inserted, chained, and
-scaled programmatically. In a telco data centre, three logically distinct
-traffic classes are kept apart:
+\subsection{The 5G Standalone core as cloud-native functions}
+
+The 5G SA core \cite{ts23501} is decomposed into NFs that talk to each other
+over a \textbf{Service-Based Interface (SBI)} --- HTTP/2 REST APIs --- much
+like microservices. The functions relevant to this project are:
 
 \begin{itemize}
-    \item \textbf{Management plane} --- operator access, configuration,
-          telemetry.
-    \item \textbf{Control plane} --- signalling between network elements and
-          the orchestration system.
-    \item \textbf{User / data plane} --- the actual subscriber traffic that
-          the network function processes.
+    \item \textbf{AMF} --- handles UE registration and mobility; it is the
+          control-plane entry point from the radio network (interface
+          \textbf{N2}).
+    \item \textbf{SMF} --- manages PDU sessions (a UE's data connection) and
+          controls the UPF over interface \textbf{N4}.
+    \item \textbf{UPF} --- the \emph{only} user-plane function: it forwards
+          actual subscriber packets. It receives them from the radio side over
+          \textbf{N3} (a GTP-U tunnel) and sends them to the data network over
+          \textbf{N6}.
+    \item \textbf{NRF} --- a registry where every NF registers and discovers
+          the others; stateless and read-heavy.
+    \item \textbf{AUSF, UDM, UDR, PCF, NSSF, SCP} --- supporting control-plane
+          functions (authentication, subscriber data, policy, slice selection,
+          and an SBI proxy). UDR keeps subscriber records in a database
+          (MongoDB).
 \end{itemize}
 
-Mixing these planes on a single interface is considered poor practice; this
-testbed enforces their separation (Section~4.2).
+\paragraph{Control plane vs.\ user plane --- the decisive separation.}
+5G makes a hard split between the \textbf{control plane} (signalling: who is
+this subscriber, may they connect, set up a session) and the \textbf{user
+plane} (the subscriber's actual data packets). The control NFs (AMF, SMF, NRF,
+\ldots) exchange small SBI messages; the UPF moves bulk traffic at high rate.
+This is why the UPF is given its own dedicated network interfaces (N3/N6) and
+why, in our cluster, those interfaces must \emph{not} share the path used for
+ordinary control signalling. This requirement drives the entire network design
+in Section~4.
 
-\subsection{OpenStack as a Traditional VIM}
+\subsection{Why Kubernetes alone is not enough}
 
-In first-generation NFV, OpenStack served as the VIM. Its core services map
-to NFVI resource types: \textbf{Nova} provides compute (VMs), \textbf{Neutron}
-provides virtual networking, and \textbf{Cinder} provides block storage. VNFs
-were shipped as VM images and instantiated by Nova. While robust, this model
-inherits the overhead of full guest operating systems: large images, boot
-times measured in minutes, and substantial per-instance RAM.
+Kubernetes is an excellent VIM, but a default pod has exactly one network
+interface, attached by a single \textbf{CNI} (Container Network Interface)
+plugin to one cluster-wide overlay. That suffices for web microservices, but
+not for a UPF that needs separate user-plane interfaces. The gap is filled by
+a \textbf{secondary CNI}: \textbf{Multus}, a meta-plugin that lets a pod be
+attached to additional networks. Section~3 turns this and the other gaps into
+an explicit list of requirements.
 
-\subsection{Kubernetes as a Cloud-Native VIM}
-
-Kubernetes has become the de-facto VIM for cloud-native deployments. Its
-primitives correspond naturally to NFV concepts:
-
-\begin{itemize}
-    \item \textbf{Pod} --- the smallest deployable unit; hosts one or more
-          containers that constitute a VNFC.
-    \item \textbf{Deployment} --- declarative management of a replicated,
-          self-healing set of pods.
-    \item \textbf{Service} --- a stable virtual IP (ClusterIP) that
-          load-balances across pod replicas.
-    \item \textbf{HorizontalPodAutoscaler (HPA)} --- automatically adjusts
-          replica count based on observed load.
-    \item \textbf{CNI (Container Network Interface)} --- the pluggable
-          networking layer; secondary CNIs (Multus) enable multi-NIC pods.
-\end{itemize}
-
-This project uses \textbf{k3s} \cite{k3s}, a CNCF-certified, single-binary
-Kubernetes distribution. k3s replaces etcd with an embedded datastore and
-bundles a minimal control plane, making it ideal for a resource-constrained
-host while remaining fully API-compatible with upstream Kubernetes.
+We use \textbf{k3s} \cite{k3s}, a CNCF-certified single-binary Kubernetes
+distribution that replaces etcd with a lightweight embedded datastore --- ideal
+for a 16~GB host while remaining fully API-compatible with upstream Kubernetes.

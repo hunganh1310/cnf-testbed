@@ -1,71 +1,98 @@
-\section{From VNF to CNF}
+\section{From VNF to CNF: what the platform must provide}
 
-\subsection{Limitations of VM-based VNFs}
+Section~2 introduced the 5G core. This section does the work the original
+framing was missing: it derives, from the concrete needs of that core,
+\emph{exactly} which capabilities the NFVI platform must offer --- and then
+maps each capability onto a specific Kubernetes mechanism. Every design choice
+in Sections~4 and~5 traces back to a row of Table~\ref{tab:requirements}.
 
-Although VM-based VNFs delivered the original promise of NFV, they carry the
-intrinsic overhead of full virtualisation:
+\subsection{Why containers (CNFs) and not VMs (VNFs)}
 
-\begin{itemize}
-    \item \textbf{Boot time} --- a guest OS takes tens of seconds to minutes
-          to become ready, slowing elastic scaling and failure recovery.
-    \item \textbf{Resource footprint} --- each VM duplicates a kernel and
-          system services, consuming hundreds of megabytes to gigabytes of
-          RAM before the network function itself runs.
-    \item \textbf{Image size} --- VM images are measured in gigabytes,
-          complicating distribution and upgrades.
-    \item \textbf{Operational rigidity} --- lifecycle operations are
-          coarse-grained and slow compared to container orchestration.
-\end{itemize}
+The first NFV deployments ran network functions as virtual machines (VNFs) on
+OpenStack. That worked, but each VM carries a full guest OS: boot times of
+tens of seconds, hundreds of megabytes to gigabytes of RAM before the function
+even starts, and multi-gigabyte images. For a 5G core that must scale quickly
+with demand, this is too heavy. A \textbf{CNF} re-packages the same function as
+containers: it starts in seconds, shares the host kernel, ships as a compact
+image, and --- most importantly --- delegates its lifecycle (restart, scale,
+heal) to Kubernetes controllers instead of bespoke automation. Open5GS ships
+each NF as such a container, which is why the whole core fits on a 16~GB host.
 
-\subsection{Cloud-Native Network Functions}
+\subsection{Requirements derived from the 5G core}
 
-A \textbf{CNF} re-implements a network function as one or more containers
-designed to run on Kubernetes. CNFs are stateless where possible, expose
-health and readiness probes, emit metrics for observability, and scale
-horizontally. They start in milliseconds to seconds, share the host kernel,
-and are distributed as compact OCI images. Crucially, CNFs delegate
-lifecycle management to Kubernetes controllers, so self-healing and scaling
-become declarative properties rather than bespoke automation.
+Table~\ref{tab:requirements} is the heart of the report's argument. The
+left column is a concrete fact about the 5G core; the middle column is the
+platform capability it forces; the right column is how we provide it.
 
-\subsection{OpenStack to Kubernetes Mapping}
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{0.34\textwidth} p{0.30\textwidth} p{0.28\textwidth}}
+\toprule
+\textbf{Need of the 5G core} & \textbf{Required platform capability} & \textbf{Provided by} \\
+\midrule
+UPF forwards user data over dedicated N3/N6 interfaces, separate from signalling
+  & A pod must have \emph{multiple} NICs on \emph{isolated} L2 networks
+  & Multus + macvlan + Whereabouts (Sec.~4.2, 5.3) \\
+Control NFs (NRF, AUSF\ldots) are stateless and scale with signalling load
+  & On-demand horizontal scaling
+  & HorizontalPodAutoscaler + metrics-server (Sec.~5.4) \\
+NFs are independent functions with their own lifecycle
+  & Declarative deploy / upgrade / heal per function
+  & Kubernetes Deployments + Helm (Sec.~5.4) \\
+NFs discover each other over SBI (HTTP/2)
+  & Stable virtual IPs and L4 load balancing
+  & Kubernetes Service (ClusterIP) \\
+An operator must see the core's health and the UPF's load
+  & Cluster-wide metrics and dashboards
+  & Prometheus + Grafana (Sec.~5.6) \\
+Subscriber records (IMSI, keys) must persist
+  & A stateful datastore
+  & MongoDB (UDR backend) \\
+Management, signalling, and user traffic must not mix
+  & Three isolated network planes
+  & Three-plane design (Sec.~4.2) \\
+\bottomrule
+\end{tabular}
+\caption{Each platform capability exists to satisfy a specific 5G-core need.}
+\label{tab:requirements}
+\end{table}
 
-Table~\ref{tab:mapping} formalises the correspondence used throughout this
-project between the ETSI NFV building blocks and the Kubernetes / k3s
-constructs that realise them.
+\subsection{Mapping ETSI / 5G onto Kubernetes}
+
+Table~\ref{tab:mapping} fixes the vocabulary used throughout: how each ETSI NFV
+block, and each concrete 5G artefact, is realised in this testbed.
 
 \begin{table}[H]
 \centering
 \begin{tabular}{lll}
 \toprule
-\textbf{ETSI NFV block} & \textbf{Traditional (OpenStack)} & \textbf{This testbed (k3s)} \\
+\textbf{ETSI NFV block} & \textbf{5G artefact} & \textbf{This testbed (k3s)} \\
 \midrule
-NFVI            & Physical hosts + KVM           & VirtualBox VMs (node0/1/2) \\
-VIM             & OpenStack (Nova/Neutron/Cinder)& k3s API server + scheduler \\
-VNF / CNF       & VM instance (Nova)             & Pods in namespace \texttt{cnf-demo} \\
-VNFM            & Tacker / Heat                  & Helm \\
-NFVO            & ONAP / Tacker                  & kubectl / GitOps (manual) \\
-Virtual network & Neutron networks               & Flannel + Multus/macvlan \\
-Block storage   & Cinder                         & emptyDir (testbed scope) \\
+NFVI            & Compute + network for NFs   & VirtualBox VMs node0/1/2 \\
+VIM             & Resource manager            & k3s API server + scheduler \\
+VNF / CNF       & UPF, AMF, SMF, NRF, \ldots   & Pods in namespace \texttt{open5gs} \\
+VNFM            & NF lifecycle manager        & Helm \\
+NFVO            & Service orchestrator        & Ansible + kubectl (manual) \\
+Virtual network & N2/N3/N4/N6 + SBI           & Multus/macvlan + Flannel \\
+Storage         & Subscriber DB               & MongoDB (emptyDir, testbed scope) \\
 \bottomrule
 \end{tabular}
-\caption{Mapping of ETSI NFV blocks onto OpenStack and the k3s testbed.}
+\caption{Mapping of ETSI NFV blocks and 5G artefacts onto the k3s testbed.}
 \label{tab:mapping}
 \end{table}
 
-\subsection{Multi-NIC Networking: Multus + macvlan}
+\subsection{The multi-NIC mechanism in detail}
 
-A standard Kubernetes pod has a single network interface (\texttt{eth0})
-attached by the primary CNI. Telco workloads, however, require multiple
-interfaces to keep management, control, and user-plane traffic separate ---
-precisely the separation Neutron provided through multiple virtual networks.
-
-\textbf{Multus} is a \emph{meta}-CNI: it does not implement networking
-itself, but allows a pod to be attached to several networks by delegating to
-other CNI plugins. In this project Multus delegates the secondary interface
-(\texttt{net1}) to the \textbf{macvlan} plugin, which creates a virtual L2
-interface bound to a physical NIC (\texttt{eth2}). IP addresses on this
-data-plane network are assigned by \textbf{Whereabouts}, a cluster-wide IPAM
-plugin that guarantees non-overlapping allocation without a central DHCP
-server. The desired secondary network is described declaratively by a
-\texttt{NetworkAttachmentDefinition} (NAD) custom resource, and requested by
-a pod through the \texttt{k8s.v1.cni.cncf.io/networks} annotation.
+Because multi-NIC networking is the capability that makes the 5G user plane
+possible, it is worth stating precisely. A standard pod gets one interface
+(\texttt{eth0}) from the primary CNI (Flannel). \textbf{Multus} is a
+\emph{meta}-CNI: it does not move packets itself but lets a pod attach
+additional interfaces by delegating to other plugins. Here Multus delegates the
+extra interfaces to \textbf{macvlan}, which creates virtual L2 interfaces bound
+to a physical NIC (\texttt{eth2}). Addresses on these networks are handed out by
+\textbf{Whereabouts}, a cluster-wide IPAM plugin that guarantees
+non-overlapping allocation without a DHCP server. Each extra network is
+described by a \texttt{NetworkAttachmentDefinition} (NAD) and requested by a pod
+through the \texttt{k8s.v1.cni.cncf.io/networks} annotation. This is exactly the
+machinery the UPF uses to obtain its N3 and N6 interfaces.
